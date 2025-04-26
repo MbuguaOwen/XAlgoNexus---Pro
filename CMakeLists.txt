@@ -17,5 +17,6 @@ add_executable(XAlgoMain
     src/core/messaging/HistoricalReplayIngestor.cpp
     src/core/ingestion/ForexReplayIngestor.cpp
     src/core/spread/SpreadEngine.cpp
+    src/core/execution/ExecutionEngine.cpp
 )
 

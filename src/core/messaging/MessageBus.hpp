@@ -19,7 +19,7 @@ namespace XAlgo {
     struct MarketEvent {
         MarketEventType type;
         std::chrono::system_clock::time_point timestamp;  // <<<<<< CHANGE THIS LINE
-        std::variant<ForexTick> payload;
+        std::variant<ForexTick, double> payload;
     };
     
     
