@@ -50,18 +50,21 @@ void HistoricalReplayIngestor::ingestLoop() {
         std::istringstream ss(line);
         std::string timestamp_str, price_str;
         if (std::getline(ss, timestamp_str, ',') && std::getline(ss, price_str)) {
-            Tick tick;
-            tick.timestamp = parseTimestamp(timestamp_str);
-            tick.price = std::stod(price_str);
+            // Build a ForexTick instead of Tick
+            ForexTick forex_tick;
+            forex_tick.symbol = "EUR/USD"; // Hardcoded for now (optional: make configurable)
+            forex_tick.bid = std::stod(price_str);
+            forex_tick.ask = forex_tick.bid; // Assume mid price (bid = ask) for this simplified replay
+            forex_tick.timestamp = parseTimestamp(timestamp_str);
 
             auto event = std::make_shared<MarketEvent>(
-                MarketEvent{MarketEventType::TICK, tick.timestamp, tick}
+                MarketEvent{MarketEventType::FOREX_TICK, forex_tick.timestamp, std::variant<ForexTick>{forex_tick}}
             );
 
             queue_.enqueue(event);
 
             if (last_tick_time.time_since_epoch().count() > 0) {
-                auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(tick.timestamp - last_tick_time);
+                auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(forex_tick.timestamp - last_tick_time);
 
                 if (mode_ == ReplayMode::RealTime) {
                     if (delay.count() > 0) std::this_thread::sleep_for(delay);
@@ -71,7 +74,7 @@ void HistoricalReplayIngestor::ingestLoop() {
                     std::this_thread::sleep_for(delay * 2);
                 }
             }
-            last_tick_time = tick.timestamp;
+            last_tick_time = forex_tick.timestamp;
         }
     }
 }

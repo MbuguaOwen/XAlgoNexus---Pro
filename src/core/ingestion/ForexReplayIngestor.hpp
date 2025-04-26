@@ -6,8 +6,8 @@
 #include <thread>
 #include <atomic>
 #include <memory>
-#include "MessageBus.hpp"
-#include "Tick.hpp"
+#include "core/messaging/MessageBus.hpp"
+#include "core/messaging/Tick.hpp"
 
 namespace XAlgo {
 
