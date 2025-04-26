@@ -52,14 +52,16 @@ void HistoricalReplayIngestor::ingestLoop() {
         if (std::getline(ss, timestamp_str, ',') && std::getline(ss, price_str)) {
             // Build a ForexTick instead of Tick
             ForexTick forex_tick;
-            forex_tick.symbol = "EUR/USD"; // Hardcoded for now (optional: make configurable)
+            forex_tick.symbol = "EUR/USD"; // Hardcoded for now
             forex_tick.bid = std::stod(price_str);
             forex_tick.ask = forex_tick.bid; // Assume mid price (bid = ask) for this simplified replay
             forex_tick.timestamp = parseTimestamp(timestamp_str);
 
-            auto event = std::make_shared<MarketEvent>(
-                MarketEvent{MarketEventType::FOREX_TICK, forex_tick.timestamp, std::variant<ForexTick>{forex_tick}}
-            );
+            auto event = std::make_shared<MarketEvent>(MarketEvent{
+                MarketEventType::FOREX_TICK,
+                forex_tick.timestamp,
+                std::variant<ForexTick, double>{forex_tick} // ✅ Correct: use forex_tick
+            });
 
             queue_.enqueue(event);
 

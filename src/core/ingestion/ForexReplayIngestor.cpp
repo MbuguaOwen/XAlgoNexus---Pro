@@ -24,14 +24,13 @@ void ForexReplayIngestor::stop() {
 
 static std::chrono::system_clock::time_point parseForexTimestamp(const std::string& ts) {
     std::tm t = {};
-    std::istringstream ss(ts.substr(0, 19)); // "01.01.2010 23:59:49"
+    std::istringstream ss(ts.substr(0, 23)); // e.g. "01.01.2010 23:59:49.604"
     ss >> std::get_time(&t, "%d.%m.%Y %H:%M:%S");
     if (ss.fail()) {
         throw std::runtime_error("Failed to parse timestamp: " + ts);
     }
     return std::chrono::system_clock::from_time_t(std::mktime(&t));
 }
-
 
 void ForexReplayIngestor::ingestLoop() {
     std::ifstream file(file_path_);
@@ -49,28 +48,23 @@ void ForexReplayIngestor::ingestLoop() {
         if (std::getline(ss, timestamp_str, ',') &&
             std::getline(ss, bid_str, ',') &&
             std::getline(ss, ask_str)) {
-            
-            ForexTick tick;
-            tick.symbol = symbol_;
-            tick.timestamp = parseForexTimestamp(timestamp_str);
-            tick.bid = std::stod(bid_str);
-            tick.ask = std::stod(ask_str);
 
-            auto event = std::make_shared<MarketEvent>(
-                MarketEvent{
-                    MarketEventType::FOREX_TICK,
-                    tick.timestamp,
-                    static_cast<std::variant<ForexTick>>(tick)
-                }
-            );
-            
-            
-            
+            ForexTick forex_tick;
+            forex_tick.symbol = symbol_;
+            forex_tick.timestamp = parseForexTimestamp(timestamp_str);
+            forex_tick.bid = std::stod(bid_str);
+            forex_tick.ask = std::stod(ask_str);
+
+            auto event = std::make_shared<MarketEvent>(MarketEvent{
+                MarketEventType::FOREX_TICK,
+                forex_tick.timestamp,
+                std::variant<ForexTick, double>{forex_tick} // ✅ Correctly wrap forex_tick
+            });
 
             queue_.enqueue(event);
 
             if (last_tick_time.time_since_epoch().count() > 0) {
-                auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(tick.timestamp - last_tick_time);
+                auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(forex_tick.timestamp - last_tick_time);
 
                 if (mode_ == ReplayMode::RealTime) {
                     if (delay.count() > 0) std::this_thread::sleep_for(delay);
@@ -81,7 +75,7 @@ void ForexReplayIngestor::ingestLoop() {
                 }
             }
 
-            last_tick_time = tick.timestamp;
+            last_tick_time = forex_tick.timestamp;
         }
     }
 }
