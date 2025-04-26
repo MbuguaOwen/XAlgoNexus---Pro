@@ -7,14 +7,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Use fmt from vcpkg
 find_package(fmt CONFIG REQUIRED)
 
-# Add include directory for core headers
-include_directories(${CMAKE_SOURCE_DIR}/src)
-
-# Add all source files here
-add_executable(XAlgoMain
-    src/main.cpp
-)
-
-target_link_libraries(XAlgoMain PRIVATE fmt::fmt)
+# Add include directories
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/third_party)
+
+# Add all source files in ONE executable
+add_executable(XAlgoMain
+    src/main.cpp
+    src/core/messaging/HistoricalReplayIngestor.cpp
+)
+
+# Link libraries
+target_link_libraries(XAlgoMain PRIVATE fmt::fmt)

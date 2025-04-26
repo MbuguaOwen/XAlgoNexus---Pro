@@ -5,6 +5,7 @@
 #include <memory>
 #include "core/messaging/MessageBus.hpp"
 #include "core/messaging/Tick.hpp"
+#include "core/messaging/HistoricalReplayIngestor.hpp"
 
 using namespace XAlgo;
 
@@ -12,24 +13,11 @@ int main() {
     EventQueue queue;
     std::atomic<bool> running{true};
 
-    // Producer thread: simulates a data source
-    std::thread producer([&]() {
-        for (int i = 0; i < 10; ++i) {
-            Tick tick;
-            tick.price = 1.1000 + 0.0001 * i;
-            tick.timestamp = std::chrono::high_resolution_clock::now();
+    // HistoricalReplayIngestor reads from CSV
+    HistoricalReplayIngestor ingestor(queue, "ticks.csv");
+    ingestor.start();
 
-            auto event = std::make_shared<MarketEvent>(
-                MarketEvent{MarketEventType::TICK, tick.timestamp, tick}
-            );
-
-            queue.enqueue(event);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        running = false;
-    });
-
-    // Consumer thread: simulates a downstream module
+    // Consumer thread
     std::thread consumer([&]() {
         while (running || queue.size_approx() > 0) {
             std::shared_ptr<MarketEvent> event;
@@ -44,9 +32,11 @@ int main() {
         }
     });
 
-    producer.join();
+    std::this_thread::sleep_for(std::chrono::seconds(2)); // Let it ingest for a bit
+    ingestor.stop();
+    running = false;
     consumer.join();
 
-    std::cout << "MessageBus test complete." << std::endl;
+    std::cout << "Historical Replay test complete." << std::endl;
     return 0;
 }
