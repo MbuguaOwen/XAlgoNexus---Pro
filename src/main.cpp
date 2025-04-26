@@ -13,11 +13,11 @@ int main() {
     EventQueue queue;
     std::atomic<bool> running{true};
 
-    // HistoricalReplayIngestor reads from CSV
-    HistoricalReplayIngestor ingestor(queue, "ticks.csv");
+    // ✅ Important: Correct relative path from build/Release
+    HistoricalReplayIngestor ingestor(queue, "../../ticks.csv");
     ingestor.start();
 
-    // Consumer thread
+    // ✅ Launch consumer thread
     std::thread consumer([&]() {
         while (running || queue.size_approx() > 0) {
             std::shared_ptr<MarketEvent> event;
@@ -32,11 +32,12 @@ int main() {
         }
     });
 
-    std::this_thread::sleep_for(std::chrono::seconds(2)); // Let it ingest for a bit
+    // ✅ Let the ingestor run for enough time
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
     ingestor.stop();
     running = false;
     consumer.join();
 
     std::cout << "Historical Replay test complete." << std::endl;
-    return 0;
 }

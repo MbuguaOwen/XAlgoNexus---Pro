@@ -1,7 +1,8 @@
 @echo off
-echo ===========================
-echo Building and Running XAlgoNexus-1.4...
-echo ===========================
+cd build\Release
+XAlgoMain.exe
+cd ../..
+
 
 :: Create build folder if missing
 if not exist build (
@@ -20,7 +21,7 @@ if not exist Makefile (
 cmake --build .
 
 :: Find the generated executable
-set EXECUTABLE=main.exe
+set EXECUTABLE=XAlgoMain.exe
 
 :: Check if the executable exists
 if exist %EXECUTABLE% (

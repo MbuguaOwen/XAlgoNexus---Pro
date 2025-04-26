@@ -1,7 +1,7 @@
 @echo off
-echo ===========================
-echo Building XAlgoNexus-1.4...
-echo ===========================
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=%cd%\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build build --config Release
+
 
 :: Create build folder if it doesn't exist
 if not exist build (
