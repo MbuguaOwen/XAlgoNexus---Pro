@@ -7,6 +7,7 @@
 #include "Tick.hpp"
 #include "moodycamel/concurrentqueue.h"
 
+
 namespace XAlgo {
 
 enum class MarketEventType { TICK, SPREAD, SIGNAL, EXECUTION };
