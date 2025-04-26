@@ -15,7 +15,7 @@ include_directories(${CMAKE_SOURCE_DIR}/third_party)
 add_executable(XAlgoMain
     src/main.cpp
     src/core/messaging/HistoricalReplayIngestor.cpp
+    src/core/ingestion/ForexReplayIngestor.cpp
 )
 
-# Link libraries
-target_link_libraries(XAlgoMain PRIVATE fmt::fmt)
+

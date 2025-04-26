@@ -24,13 +24,14 @@ void ForexReplayIngestor::stop() {
 
 static std::chrono::system_clock::time_point parseForexTimestamp(const std::string& ts) {
     std::tm t = {};
-    std::istringstream ss(ts.substr(0, 19));
-    ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+    std::istringstream ss(ts.substr(0, 19)); // "01.01.2010 23:59:49"
+    ss >> std::get_time(&t, "%d.%m.%Y %H:%M:%S");
     if (ss.fail()) {
         throw std::runtime_error("Failed to parse timestamp: " + ts);
     }
     return std::chrono::system_clock::from_time_t(std::mktime(&t));
 }
+
 
 void ForexReplayIngestor::ingestLoop() {
     std::ifstream file(file_path_);
@@ -56,8 +57,15 @@ void ForexReplayIngestor::ingestLoop() {
             tick.ask = std::stod(ask_str);
 
             auto event = std::make_shared<MarketEvent>(
-                MarketEvent{MarketEventType::TICK, tick.timestamp, tick}
+                MarketEvent{
+                    MarketEventType::FOREX_TICK,
+                    tick.timestamp,
+                    static_cast<std::variant<ForexTick>>(tick)
+                }
             );
+            
+            
+            
 
             queue_.enqueue(event);
 
