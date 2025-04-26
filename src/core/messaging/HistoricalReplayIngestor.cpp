@@ -1,14 +1,25 @@
 #include "HistoricalReplayIngestor.hpp"
+#include <iomanip>
+#include <sstream>
+#include <ctime>
 
 namespace XAlgo {
 
-static std::chrono::high_resolution_clock::time_point parseTimestamp(const std::string& ts) {
-    // Dummy parser: just use now
-    return std::chrono::high_resolution_clock::now();
+// Parse timestamp from "YYYY-MM-DDTHH:MM:SS" format
+static std::chrono::system_clock::time_point parseTimestamp(const std::string& ts) {
+    std::tm t = {};
+    std::istringstream ss(ts.substr(0, 19)); // Ignore anything after seconds
+    ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+
+    if (ss.fail()) {
+        throw std::runtime_error("Failed to parse timestamp: " + ts);
+    }
+
+    return std::chrono::system_clock::from_time_t(std::mktime(&t));
 }
 
-HistoricalReplayIngestor::HistoricalReplayIngestor(EventQueue& queue, const std::string& file_path)
-    : queue_(queue), file_path_(file_path), running_(false) {}
+HistoricalReplayIngestor::HistoricalReplayIngestor(EventQueue& queue, const std::string& file_path, ReplayMode mode)
+    : queue_(queue), file_path_(file_path), mode_(mode), running_(false) {}
 
 HistoricalReplayIngestor::~HistoricalReplayIngestor() {
     stop();
@@ -33,31 +44,34 @@ void HistoricalReplayIngestor::ingestLoop() {
     }
 
     std::string line;
-    std::chrono::high_resolution_clock::time_point last_tick_time;
+    std::chrono::system_clock::time_point last_tick_time;
 
     while (std::getline(file, line) && running_) {
         std::istringstream ss(line);
         std::string timestamp_str, price_str;
         if (std::getline(ss, timestamp_str, ',') && std::getline(ss, price_str)) {
             Tick tick;
-            tick.timestamp = parseTimestamp(timestamp_str); // Parse timestamp properly later
+            tick.timestamp = parseTimestamp(timestamp_str);
             tick.price = std::stod(price_str);
-
-            auto now = std::chrono::high_resolution_clock::now();
-            if (last_tick_time.time_since_epoch().count() > 0) {
-                auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(tick.timestamp - last_tick_time);
-                if (delay.count() > 0) {
-                    std::this_thread::sleep_for(delay);
-                }
-            }
-
-            last_tick_time = tick.timestamp;
 
             auto event = std::make_shared<MarketEvent>(
                 MarketEvent{MarketEventType::TICK, tick.timestamp, tick}
             );
 
             queue_.enqueue(event);
+
+            if (last_tick_time.time_since_epoch().count() > 0) {
+                auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(tick.timestamp - last_tick_time);
+
+                if (mode_ == ReplayMode::RealTime) {
+                    if (delay.count() > 0) std::this_thread::sleep_for(delay);
+                } else if (mode_ == ReplayMode::FastForward) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } else if (mode_ == ReplayMode::SlowMotion) {
+                    std::this_thread::sleep_for(delay * 2);
+                }
+            }
+            last_tick_time = tick.timestamp;
         }
     }
 }

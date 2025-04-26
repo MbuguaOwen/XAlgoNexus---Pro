@@ -13,11 +13,10 @@ int main() {
     EventQueue queue;
     std::atomic<bool> running{true};
 
-    // ✅ Important: Correct relative path from build/Release
-    HistoricalReplayIngestor ingestor(queue, "../../ticks.csv");
+    // HistoricalReplayIngestor reads real GBP/USD ticks
+    HistoricalReplayIngestor ingestor(queue, "../../ticks_gbpusd.csv", ReplayMode::RealTime);
     ingestor.start();
 
-    // ✅ Launch consumer thread
     std::thread consumer([&]() {
         while (running || queue.size_approx() > 0) {
             std::shared_ptr<MarketEvent> event;
@@ -32,9 +31,7 @@ int main() {
         }
     });
 
-    // ✅ Let the ingestor run for enough time
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     ingestor.stop();
     running = false;
     consumer.join();

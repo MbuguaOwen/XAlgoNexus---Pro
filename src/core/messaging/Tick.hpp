@@ -1,11 +1,15 @@
-// src/core/messaging/Tick.hpp
 #pragma once
 
+#include <string>
 #include <chrono>
 
 namespace XAlgo {
-struct Tick {
-    double price;
-    std::chrono::high_resolution_clock::time_point timestamp;
+
+struct ForexTick {
+    std::string symbol; // e.g., "EUR/USD"
+    double bid = 0.0;
+    double ask = 0.0;
+    std::chrono::system_clock::time_point timestamp;
 };
-}
+
+} // namespace XAlgo

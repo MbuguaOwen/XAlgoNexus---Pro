@@ -17,10 +17,10 @@ enum class ReplayMode {
     SlowMotion
 };
 
-class HistoricalReplayIngestor {
+class ForexReplayIngestor {
 public:
-    HistoricalReplayIngestor(EventQueue& queue, const std::string& file_path, ReplayMode mode = ReplayMode::RealTime);
-    ~HistoricalReplayIngestor();
+    ForexReplayIngestor(EventQueue& queue, const std::string& file_path, const std::string& symbol, ReplayMode mode = ReplayMode::RealTime);
+    ~ForexReplayIngestor();
 
     void start();
     void stop();
@@ -29,6 +29,7 @@ private:
     void ingestLoop();
     EventQueue& queue_;
     std::string file_path_;
+    std::string symbol_;
     ReplayMode mode_;
     std::atomic<bool> running_;
     std::thread ingest_thread_;
