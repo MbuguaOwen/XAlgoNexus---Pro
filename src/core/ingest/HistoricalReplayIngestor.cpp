@@ -1,5 +1,3 @@
-// src/core/ingest/HistoricalReplayIngestor.cpp
-
 #include "core/ingest/HistoricalReplayIngestor.hpp"
 #include "core/preprocess/ForexTick.hpp"
 #include <fstream>
@@ -41,24 +39,23 @@ void HistoricalReplayIngestor::run() {
 
 MarketEvent HistoricalReplayIngestor::parseLine(const std::string& line) {
     std::istringstream ss(line);
-    std::string ts_str, symbol_str, bid_str, ask_str;
-
+    std::string ts_str, symbol, bid_str, ask_str;
     std::getline(ss, ts_str, ',');
-    std::getline(ss, symbol_str, ',');
+    std::getline(ss, symbol, ',');
     std::getline(ss, bid_str, ',');
     std::getline(ss, ask_str, ',');
 
     ForexTick tick;
-    tick.timestamp = std::chrono::system_clock::time_point{std::chrono::milliseconds(std::stoll(ts_str))};
-    tick.symbol    = symbol_str;
-    tick.bid       = std::stod(bid_str);
-    tick.ask       = std::stod(ask_str);
+    tick.timestamp = std::chrono::milliseconds(std::stoll(ts_str));
+    tick.symbol = symbol;
+    tick.bid = std::stod(bid_str);
+    tick.ask = std::stod(ask_str);
 
-    MarketEvent evt;
-    evt.type     = MarketEventType::FOREX_TICK;
-    evt.timestamp = tick.timestamp;
-    evt.payload  = tick;
-    return evt;
+    MarketEvent e;
+    e.type = MarketEventType::FOREX_TICK;
+    e.timestamp = std::chrono::system_clock::now();  // Real-time stamp
+    e.payload = tick;
+    return e;
 }
 
-}  // namespace XAlgo
+} // namespace XAlgo

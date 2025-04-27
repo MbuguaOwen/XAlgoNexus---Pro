@@ -1,16 +1,14 @@
 #pragma once
-
-#include <chrono>
 #include <string>
+#include <chrono>
 
 namespace XAlgo {
 
 struct ForexTick {
+    std::chrono::milliseconds timestamp;
     std::string symbol;
-    double bid = 0.0;
-    double ask = 0.0;
-    double mid = 0.0;
-    std::chrono::system_clock::time_point timestamp;
+    double bid;
+    double ask;
 };
 
 } // namespace XAlgo

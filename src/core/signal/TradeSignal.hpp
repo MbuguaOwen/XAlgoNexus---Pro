@@ -1,15 +1,12 @@
 #pragma once
-
 #include <chrono>
 
 namespace XAlgo {
 
 struct TradeSignal {
-    enum class Side { BUY, SELL };
-
-    Side side;
-    double spread_value;
     std::chrono::system_clock::time_point timestamp;
+    double spread;
+    int direction; // +1 for buy synthetic (sell real), -1 for sell synthetic (buy real)
 };
 
 } // namespace XAlgo
