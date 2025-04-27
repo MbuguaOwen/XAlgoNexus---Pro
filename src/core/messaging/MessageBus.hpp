@@ -1,15 +1,14 @@
 #pragma once
 
 #include "core/messaging/MarketEvent.hpp"
-#include "moodycamel/concurrentqueue.h"
 #include <memory>
+#include "moodycamel/concurrentqueue.h"
 
 namespace XAlgo {
 
-// Core event queue alias
+// Lock-free event queue for messages
 using EventQueue = moodycamel::ConcurrentQueue<std::shared_ptr<MarketEvent>>;
 
-// Simple in-process message bus
 class MessageBus {
 public:
     MessageBus() = default;

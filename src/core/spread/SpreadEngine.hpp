@@ -1,7 +1,8 @@
+// Updated SpreadEngine.hpp
 #pragma once
 
 #include "core/messaging/MarketEvent.hpp"
-#include "core/preprocess/Tick.hpp"
+#include "core/preprocess/ForexTick.hpp"
 #include "core/filters/VolatilityEstimator.hpp"
 #include "moodycamel/concurrentqueue.h"
 #include <memory>
@@ -24,7 +25,7 @@ private:
 
     EventQueue& signal_queue_;
     double spread_threshold_;
-    double volatility_multiplier_; // multiplies estimated volatility to set dynamic threshold
+    double volatility_multiplier_;
 
     VolatilityEstimator volatility_estimator_;
 

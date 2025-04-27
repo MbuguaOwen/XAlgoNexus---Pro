@@ -1,3 +1,5 @@
+
+#include "core/preprocess/ForexTick.hpp"
 #include "core/spread/SpreadEngine.hpp"
 #include <iostream>
 #include <cmath>

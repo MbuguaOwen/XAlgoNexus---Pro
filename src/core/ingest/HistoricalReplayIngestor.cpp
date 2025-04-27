@@ -1,7 +1,7 @@
-// src/core/ingest/HistoricalReplayIngestor.cpp
 
+// Updated HistoricalReplayIngestor.cpp
 #include "core/ingest/HistoricalReplayIngestor.hpp"
-#include "core/preprocess/ForexTick.hpp"  // ✅ Added missing include
+#include "core/preprocess/ForexTick.hpp"
 #include <fstream>
 #include <sstream>
 #include <thread>
@@ -46,13 +46,15 @@ MarketEvent HistoricalReplayIngestor::parseLine(const std::string& line) {
     std::getline(ss, pr, ',');
 
     ForexTick tick;
-    tick.timestamp = std::stoll(ts);
-    tick.price     = std::stod(pr);
+    tick.timestamp = std::chrono::system_clock::now();
+    tick.bid = std::stod(pr);
+    tick.ask = std::stod(pr);
+    tick.mid = (tick.bid + tick.ask) / 2.0;
 
     MarketEvent e;
-    e.type    = MarketEventType::TICK;
+    e.type    = MarketEventType::FOREX_TICK;
     e.payload = tick;
     return e;
 }
 
-}  // namespace XAlgo
+} // namespace XAlgo

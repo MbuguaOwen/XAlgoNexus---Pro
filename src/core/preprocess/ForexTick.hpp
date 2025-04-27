@@ -1,17 +1,10 @@
 #pragma once
 
-#include <string>
 #include <chrono>
+#include <string>
 
 namespace XAlgo {
 
-// Basic normalized Tick (for general use, e.g., equity, crypto)
-struct Tick {
-    double price = 0.0;
-    std::chrono::system_clock::time_point timestamp;
-};
-
-// Forex specific Tick (bid/ask/mid model)
 struct ForexTick {
     std::string symbol;
     double bid = 0.0;

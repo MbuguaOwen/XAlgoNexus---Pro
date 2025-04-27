@@ -40,7 +40,6 @@ set(XALGO_SOURCES
   ${CMAKE_SOURCE_DIR}/src/core/logger/TradeLogger.cpp
   ${CMAKE_SOURCE_DIR}/src/core/messaging/MessageBus.cpp
   ${CMAKE_SOURCE_DIR}/src/core/risk/RiskManagerThread.cpp
-  ${CMAKE_SOURCE_DIR}/src/VolatilityEstimator.cpp
   ${CMAKE_SOURCE_DIR}/src/core/signal/MLFilters/EWMAFilter.cpp
   ${CMAKE_SOURCE_DIR}/src/core/signal/MLFilters/EntropyFilter.cpp
   ${CMAKE_SOURCE_DIR}/src/core/signal/MLFilters/KalmanFilter.cpp
