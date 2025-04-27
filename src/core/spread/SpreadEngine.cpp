@@ -3,8 +3,14 @@
 
 namespace XAlgo {
 
-SpreadEngine::SpreadEngine(EventQueue& signal_queue)
-    : signal_queue_(signal_queue) {}
+SpreadEngine::SpreadEngine(EventQueue& signal_queue, double initial_spread_threshold)
+    : signal_queue_(signal_queue),
+      spread_threshold_(initial_spread_threshold),
+      volatility_estimator_(500) {}
+
+void SpreadEngine::setSpreadThreshold(double threshold) {
+    spread_threshold_ = threshold;
+}
 
 void SpreadEngine::update(const ForexTick& tick) {
     if (tick.symbol == "EUR/USD") {
@@ -25,9 +31,24 @@ void SpreadEngine::calculateSpread() {
 
         std::cout << "[Spread] (EUR/USD) - (GBP/USD * EUR/GBP) = " << spread << std::endl;
 
-        // Optionally: generate a SIGNAL event if spread exceeds threshold
-        if (std::abs(spread) > 0.0001) { // threshold
+        volatility_estimator_.addSample(spread);
+
+        double volatility = volatility_estimator_.getVolatility();
+        spread_threshold_ = volatility_multiplier_ * volatility;
+
+        if (std::abs(spread) > spread_threshold_) {
             auto now = std::chrono::system_clock::now();
+
+            auto event = std::make_shared<MarketEvent>(MarketEvent{
+                MarketEventType::SIGNAL,
+                now,
+                std::variant<ForexTick, double>{spread}
+            });
+
+            signal_queue_.enqueue(event);
+
+            std::cout << "[Signal] Spread signal generated: " << spread 
+                      << " (Threshold: " << spread_threshold_ << ")" << std::endl;
         }
     }
 }

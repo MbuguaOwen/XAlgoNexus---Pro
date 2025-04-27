@@ -39,7 +39,7 @@ int main() {
     EventQueue signal_queue;
     std::atomic<bool> running{true};
 
-    SpreadEngine spread_engine(signal_queue);
+    SpreadEngine spread_engine(signal_queue, 0.00001);
     ExecutionEngine execution_engine(
         0.0,        // slippage_mean
         0.00002,    // slippage_stddev
