@@ -1,15 +1,22 @@
-#include "SpreadEngine.hpp"
+#include "core/spread/SpreadEngine.hpp"
 #include <iostream>
+#include <cmath>
 
 namespace XAlgo {
 
 SpreadEngine::SpreadEngine(EventQueue& signal_queue, double initial_spread_threshold)
     : signal_queue_(signal_queue),
       spread_threshold_(initial_spread_threshold),
-      volatility_estimator_(500) {}
+      volatility_multiplier_(2.0),   // Default: 2x standard deviation
+      volatility_estimator_(500)      // Rolling window of 500 samples
+{}
 
 void SpreadEngine::setSpreadThreshold(double threshold) {
     spread_threshold_ = threshold;
+}
+
+void SpreadEngine::setVolatilityMultiplier(double multiplier) {
+    volatility_multiplier_ = multiplier;
 }
 
 void SpreadEngine::update(const ForexTick& tick) {
@@ -21,35 +28,40 @@ void SpreadEngine::update(const ForexTick& tick) {
         eurgbp_ = tick;
     }
 
-    calculateSpread();
+    // Only calculate if all three are present
+    if (eurusd_ && gbpusd_ && eurgbp_) {
+        calculateSpread();
+    }
 }
 
 void SpreadEngine::calculateSpread() {
-    if (eurusd_ && gbpusd_ && eurgbp_) {
-        double synthetic = gbpusd_->bid * eurgbp_->bid;
-        double spread = eurusd_->bid - synthetic;
+    double eurusd_mid = (eurusd_->bid + eurusd_->ask) / 2.0;
+    double gbpusd_mid = (gbpusd_->bid + gbpusd_->ask) / 2.0;
+    double eurgbp_mid = (eurgbp_->bid + eurgbp_->ask) / 2.0;
 
-        std::cout << "[Spread] (EUR/USD) - (GBP/USD * EUR/GBP) = " << spread << std::endl;
+    double synthetic_eur_usd = gbpusd_mid * eurgbp_mid;
+    double spread = eurusd_mid - synthetic_eur_usd;
 
-        volatility_estimator_.addSample(spread);
+    // Feed into volatility estimator
+    volatility_estimator_.addSample(spread);
+    double volatility = volatility_estimator_.getVolatility();
+    spread_threshold_ = volatility_multiplier_ * volatility;
 
-        double volatility = volatility_estimator_.getVolatility();
-        spread_threshold_ = volatility_multiplier_ * volatility;
+    // Generate signal if spread exceeds threshold
+    if (std::abs(spread) > spread_threshold_) {
+        auto now = std::chrono::system_clock::now();
 
-        if (std::abs(spread) > spread_threshold_) {
-            auto now = std::chrono::system_clock::now();
+        auto event = std::make_shared<MarketEvent>();
+        event->type = MarketEventType::SIGNAL;
+        event->timestamp = now;
+        event->payload = spread;
 
-            auto event = std::make_shared<MarketEvent>(MarketEvent{
-                MarketEventType::SIGNAL,
-                now,
-                std::variant<ForexTick, double>{spread}
-            });
+        signal_queue_.enqueue(event);
 
-            signal_queue_.enqueue(event);
-
-            std::cout << "[Signal] Spread signal generated: " << spread 
-                      << " (Threshold: " << spread_threshold_ << ")" << std::endl;
-        }
+#ifdef DEBUG_SPREAD_ENGINE
+        std::cout << "[SpreadEngine] Signal generated: Spread=" << spread
+                  << ", Threshold=" << spread_threshold_ << std::endl;
+#endif
     }
 }
 

@@ -1,37 +1,32 @@
+// src/core/ingest/HistoricalReplayIngestor.hpp
 #pragma once
 
+#include "core/messaging/MessageBus.hpp"
+#include "core/messaging/MarketEvent.hpp"
 #include <string>
 #include <fstream>
-#include <sstream>
-#include <thread>
-#include <atomic>
-#include <memory>
-#include "MessageBus.hpp"
-#include "Tick.hpp"
 
 namespace XAlgo {
 
-enum class ReplayMode {
-    RealTime,
-    FastForward,
-    SlowMotion
-};
+enum class ReplayMode { FAST, REALTIME };
 
 class HistoricalReplayIngestor {
 public:
-    HistoricalReplayIngestor(EventQueue& queue, const std::string& file_path, ReplayMode mode = ReplayMode::RealTime);
+    HistoricalReplayIngestor(MessageBus* bus,
+                              const std::string& filename,
+                              ReplayMode mode = ReplayMode::FAST);
     ~HistoricalReplayIngestor();
 
-    void start();
-    void stop();
+    bool isFileOpen() const;
+    void run();
 
 private:
-    void ingestLoop();
-    EventQueue& queue_;
-    std::string file_path_;
-    ReplayMode mode_;
-    std::atomic<bool> running_;
-    std::thread ingest_thread_;
+    MarketEvent parseLine(const std::string& line);
+
+    MessageBus*    bus_;
+    std::string    filename_;
+    std::ifstream  infile_;
+    ReplayMode     mode_;
 };
 
 } // namespace XAlgo

@@ -1,9 +1,11 @@
 #pragma once
 
-#include "core/messaging/MessageBus.hpp"
-#include <random>
 #include <vector>
-#include <string>  // Needed for saveTradesToCSV
+#include <random>
+#include <string>
+#include "core/messaging/MarketEvent.hpp"
+#include "core/risk/RiskEngine.hpp"
+#include "core/signal/SignalGenerator.hpp" // For TradeSignal definition
 
 namespace XAlgo {
 
@@ -14,35 +16,34 @@ struct TradeRecord {
 
 class ExecutionEngine {
 public:
-    ExecutionEngine(
-        double slippage_mean = 0.0,
-        double slippage_stddev = 0.00002,
-        int latency_ms = 50,
-        double fill_probability = 0.95,
-        double max_drawdown = -1000.0
-    );
+    ExecutionEngine();  // Default
+    ExecutionEngine(double sl_mean, double sl_std, int latency, double fill_prob, double max_dd);
 
-    void handleSignal(double spread);
+    void attachRiskEngine(RiskEngine* eng);
+    void handleSignal(const TradeSignal& signal);
+
+    void stopTrading();
+
     double getPnL() const { return pnl_; }
-    bool isTradingActive() const { return trading_active_; }
     void printReport() const;
-    void saveTradesToCSV(const std::string& filename) const;  // ✅ New
+    void saveTradesToCSV(const std::string& filename) const;
 
 private:
     double pnl_;
-    double slippage_mean_;
-    double slippage_stddev_;
-    int latency_ms_;
-    double fill_probability_;
-    double max_drawdown_;
-    bool trading_active_;
+    double max_pnl_;
+    double min_pnl_;
+    double slippage_mean_, slippage_stddev_;
+    int    latency_ms_;
+    double fill_probability_, max_drawdown_;
+    bool   trading_active_;
+
+    RiskEngine* riskEngine_;
+
+    std::mt19937                            rng_;
+    std::normal_distribution<double>       slippage_dist_;
+    std::uniform_real_distribution<double> random_fill_dist_;
 
     std::vector<TradeRecord> trades_;
-    double max_pnl_;  // For tracking max equity for drawdown calculations
-
-    std::default_random_engine rng_;
-    std::normal_distribution<double> slippage_dist_;
-    std::uniform_real_distribution<double> random_fill_dist_;
 };
 
 } // namespace XAlgo

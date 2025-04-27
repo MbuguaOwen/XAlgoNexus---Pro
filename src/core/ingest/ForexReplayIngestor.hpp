@@ -1,38 +1,44 @@
+// src/core/ingest/ForexReplayIngestor.hpp
 #pragma once
 
+#include "core/messaging/MarketEvent.hpp"
+#include "core/preprocess/ForexTick.hpp"
+#include "moodycamel/concurrentqueue.h"
 #include <string>
 #include <fstream>
 #include <sstream>
-#include <thread>
 #include <atomic>
-#include <memory>
-#include "core/messaging/MessageBus.hpp"
-#include "core/messaging/Tick.hpp"
+#include <thread>
+#include <optional>
 
 namespace XAlgo {
 
-enum class ReplayMode {
-    RealTime,
-    FastForward,
-    SlowMotion
-};
+    using EventQueue = moodycamel::ConcurrentQueue<std::shared_ptr<MarketEvent>>;
 
-class ForexReplayIngestor {
-public:
-    ForexReplayIngestor(EventQueue& queue, const std::string& file_path, const std::string& symbol, ReplayMode mode = ReplayMode::RealTime);
-    ~ForexReplayIngestor();
+    enum class ReplayMode {
+        RealTime,
+        FastForward,
+        SlowMotion
+    };
 
-    void start();
-    void stop();
+    class ForexReplayIngestor {
+    public:
+        ForexReplayIngestor(EventQueue& queue, const std::string& file_path, const std::string& symbol, ReplayMode mode = ReplayMode::RealTime);
+        ~ForexReplayIngestor();
 
-private:
-    void ingestLoop();
-    EventQueue& queue_;
-    std::string file_path_;
-    std::string symbol_;
-    ReplayMode mode_;
-    std::atomic<bool> running_;
-    std::thread ingest_thread_;
-};
+        void start();
+        void stop();
+
+    private:
+        void ingestLoop();
+        ForexTick parseLine(const std::string& line);
+
+        EventQueue& queue_;
+        std::string file_path_;
+        std::string symbol_;
+        ReplayMode mode_;
+        std::atomic<bool> running_;
+        std::thread ingest_thread_;
+    };
 
 } // namespace XAlgo

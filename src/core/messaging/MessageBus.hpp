@@ -1,30 +1,29 @@
 #pragma once
 
-#include <chrono>
-#include <variant>
-#include <memory>
-#include "Tick.hpp"
+#include "core/messaging/MarketEvent.hpp"
 #include "moodycamel/concurrentqueue.h"
+#include <memory>
 
 namespace XAlgo {
 
-    enum class MarketEventType { 
-        TICK, 
-        FOREX_TICK, 
-        SPREAD, 
-        SIGNAL, 
-        EXECUTION 
-    };
-    
-    struct MarketEvent {
-        MarketEventType type;
-        std::chrono::system_clock::time_point timestamp;  // <<<<<< CHANGE THIS LINE
-        std::variant<ForexTick, double> payload;
-    };
-    
-    
-
-// Define an alias for the lock-free queue
+// Core event queue alias
 using EventQueue = moodycamel::ConcurrentQueue<std::shared_ptr<MarketEvent>>;
+
+// Simple in-process message bus
+class MessageBus {
+public:
+    MessageBus() = default;
+
+    void publish(std::shared_ptr<MarketEvent> event) {
+        queue_.enqueue(std::move(event));
+    }
+
+    bool poll(std::shared_ptr<MarketEvent>& outEvent) {
+        return queue_.try_dequeue(outEvent);
+    }
+
+private:
+    EventQueue queue_;
+};
 
 } // namespace XAlgo

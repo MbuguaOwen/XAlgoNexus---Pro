@@ -1,57 +1,58 @@
 // src/core/ingest/HistoricalReplayIngestor.cpp
 
-#include "../messaging/MessageBus.hpp"
-#include "../messaging/MarketEvent.hpp"
+#include "core/ingest/HistoricalReplayIngestor.hpp"
+#include "core/preprocess/ForexTick.hpp"  // ✅ Added missing include
 #include <fstream>
 #include <sstream>
 #include <thread>
 #include <chrono>
 
-class HistoricalReplayIngestor {
-public:
-    HistoricalReplayIngestor(MessageBus* bus, const std::string& dataFilePath)
-        : bus_(bus), dataFilePath_(dataFilePath) {}
+namespace XAlgo {
 
-    void run() {
-        std::ifstream file(dataFilePath_);
-        std::string line;
+HistoricalReplayIngestor::HistoricalReplayIngestor(MessageBus* bus,
+                                                   const std::string& filename,
+                                                   ReplayMode mode)
+  : bus_(bus), filename_(filename), infile_(filename), mode_(mode)
+{}
 
-        if (!file.is_open()) {
-            throw std::runtime_error("Failed to open historical data file");
-        }
+HistoricalReplayIngestor::~HistoricalReplayIngestor() {
+    if (infile_.is_open()) {
+        infile_.close();
+    }
+}
 
-        while (std::getline(file, line)) {
-            Tick tick = parseLine(line);
+bool HistoricalReplayIngestor::isFileOpen() const {
+    return infile_.is_open();
+}
 
-            MarketEvent event;
-            event.timestamp = std::chrono::high_resolution_clock::now();
-            event.type = MarketEvent::Type::TICK;
-            event.payload = tick;
+void HistoricalReplayIngestor::run() {
+    std::string line;
+    std::getline(infile_, line); // skip header
 
-            bus_->publish(event);
+    while (std::getline(infile_, line) && bus_) {
+        auto evt = parseLine(line);
+        bus_->publish(std::make_shared<MarketEvent>(std::move(evt)));
 
-            // Simulate real-time replay: sleep ~1ms between ticks
+        if (mode_ == ReplayMode::REALTIME) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
+}
 
-private:
-    MessageBus* bus_;
-    std::string dataFilePath_;
+MarketEvent HistoricalReplayIngestor::parseLine(const std::string& line) {
+    std::istringstream ss(line);
+    std::string ts, pr;
+    std::getline(ss, ts, ',');
+    std::getline(ss, pr, ',');
 
-    Tick parseLine(const std::string& line) {
-        Tick tick;
-        std::istringstream ss(line);
-        std::string token;
-        
-        // Example CSV format: timestamp,bid,ask
-        std::getline(ss, token, ','); // timestamp (ignored here)
-        std::getline(ss, token, ',');
-        tick.bid = std::stod(token);
-        std::getline(ss, token, ',');
-        tick.ask = std::stod(token);
+    ForexTick tick;
+    tick.timestamp = std::stoll(ts);
+    tick.price     = std::stod(pr);
 
-        tick.mid = (tick.bid + tick.ask) / 2.0;
-        return tick;
-    }
-};
+    MarketEvent e;
+    e.type    = MarketEventType::TICK;
+    e.payload = tick;
+    return e;
+}
+
+}  // namespace XAlgo
