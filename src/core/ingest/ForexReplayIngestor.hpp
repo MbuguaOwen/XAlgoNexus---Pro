@@ -1,44 +1,63 @@
 // src/core/ingest/ForexReplayIngestor.hpp
+
 #pragma once
+
+/**
+ * @file ForexReplayIngestor.hpp
+ * @brief Ingestor that replays Forex tick data into an event queue for backtesting.
+ */
 
 #include "core/messaging/MarketEvent.hpp"
 #include "core/preprocess/ForexTick.hpp"
+#include "core/common/ReplayMode.hpp"
 #include "moodycamel/concurrentqueue.h"
 #include <string>
-#include <fstream>
-#include <sstream>
 #include <atomic>
 #include <thread>
-#include <optional>
+#include <memory>
 
 namespace XAlgo {
 
-    using EventQueue = moodycamel::ConcurrentQueue<std::shared_ptr<MarketEvent>>;
+/**
+ * @class ForexReplayIngestor
+ * @brief Ingests historical Forex tick data into a lock-free event queue.
+ */
+class ForexReplayIngestor {
+public:
+    /**
+     * @brief Constructor.
+     * @param queue Reference to the target event queue.
+     * @param file_path Path to the historical data file.
+     * @param symbol Target symbol override (optional).
+     * @param mode Replay mode.
+     */
+    ForexReplayIngestor(EventQueue& queue, const std::string& file_path, const std::string& symbol, ReplayMode mode = ReplayMode::REALTIME);
 
-    enum class ReplayMode {
-        RealTime,
-        FastForward,
-        SlowMotion
-    };
+    /**
+     * @brief Destructor.
+     */
+    ~ForexReplayIngestor();
 
-    class ForexReplayIngestor {
-    public:
-        ForexReplayIngestor(EventQueue& queue, const std::string& file_path, const std::string& symbol, ReplayMode mode = ReplayMode::RealTime);
-        ~ForexReplayIngestor();
+    /**
+     * @brief Start the ingestion loop in a separate thread.
+     */
+    void start();
 
-        void start();
-        void stop();
+    /**
+     * @brief Stop the ingestion loop.
+     */
+    void stop();
 
-    private:
-        void ingestLoop();
-        ForexTick parseLine(const std::string& line);
+private:
+    void ingestLoop();
+    ForexTick parseLine(const std::string& line);
 
-        EventQueue& queue_;
-        std::string file_path_;
-        std::string symbol_;
-        ReplayMode mode_;
-        std::atomic<bool> running_;
-        std::thread ingest_thread_;
-    };
+    EventQueue& queue_;           ///< Reference to shared event queue.
+    std::string file_path_;       ///< Historical data file path.
+    std::string symbol_;          ///< Optional symbol override.
+    ReplayMode mode_;             ///< Replay behavior mode.
+    std::atomic<bool> running_;   ///< Running status flag.
+    std::thread ingest_thread_;   ///< Ingestion worker thread.
+};
 
 } // namespace XAlgo

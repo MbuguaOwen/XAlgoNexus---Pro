@@ -1,91 +1,66 @@
+// src/core/execution/ExecutionEngine.cpp
+
 #include "core/execution/ExecutionEngine.hpp"
+#include "core/signal/TradeSignal.hpp"
 #include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <thread>
 #include <chrono>
-#include <random>
 
 namespace XAlgo {
 
-ExecutionEngine::ExecutionEngine()
-    : ExecutionEngine(0.0001, 0.00005, 5, 0.9, -1000.0)
+ExecutionEngine::ExecutionEngine(EventQueue& queue, RiskEngine* risk_engine)
+    : queue_(queue),
+      logger_(std::make_unique<TradeLogger>("live_trades.csv")),
+      risk_engine_(risk_engine),
+      running_(false)
 {}
 
-ExecutionEngine::ExecutionEngine(double sl_mean, double sl_std, int latency, double fill_prob, double max_dd)
-    : pnl_(0.0),
-      max_pnl_(0.0),
-      slippage_mean_(sl_mean),
-      slippage_stddev_(sl_std),
-      latency_ms_(latency),
-      fill_probability_(fill_prob),
-      max_drawdown_(max_dd),
-      trading_active_(true),
-      riskEngine_(nullptr),
-      rng_(std::random_device{}()),
-      slippage_dist_(sl_mean, sl_std),
-      random_fill_dist_(0.0, 1.0)
-{}
-
-void ExecutionEngine::attachRiskEngine(RiskEngine* engine) {
-    riskEngine_ = engine;
+ExecutionEngine::~ExecutionEngine() {
+    stop();
 }
 
-void ExecutionEngine::handleSignal(const TradeSignal& signal) {
-    if (!trading_active_) {
-        std::cout << "[EXEC] Trading halted by risk engine.\n";
-        return;
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(latency_ms_));
-
-    if (random_fill_dist_(rng_) > fill_probability_) {
-        std::cout << "[EXEC] Trade rejected due to fill probability.\n";
-        return;
-    }
-
-    double slip = slippage_dist_(rng_);
-    double effective_spread = signal.spread - slip;
-
-    double profit = signal.direction * effective_spread * 100000.0;
-    pnl_ += profit;
-    trades_.push_back({ profit, profit >= 0.0, signal.spread, signal.strength });
-
-    if (pnl_ > max_pnl_) max_pnl_ = pnl_;
-    if (pnl_ <= max_drawdown_) trading_active_ = false;
-
-    if (riskEngine_) {
-        riskEngine_->updatePosition(profit);
-    }
-
-    std::cout << "[EXEC] Executed " << (signal.direction > 0 ? "BUY" : "SELL")
-              << " | Spread=" << signal.spread
-              << " | Strength=" << signal.strength
-              << " | PnL=" << pnl_
-              << std::endl;
+void ExecutionEngine::start() {
+    running_ = true;
+    thread_ = std::thread(&ExecutionEngine::run, this);
 }
 
-void ExecutionEngine::printReport() const {
-    size_t wins = 0;
-    for (const auto& trade : trades_)
-        if (trade.win) ++wins;
-
-    std::cout << "\n=== EXECUTION REPORT ===\n"
-              << "Total Trades: " << trades_.size()
-              << ", Wins: " << wins
-              << ", Win Rate: " << (trades_.empty() ? 0.0 : 100.0 * wins / trades_.size()) << "%\n"
-              << "Final PnL: " << pnl_ << "\n";
+void ExecutionEngine::stop() {
+    running_ = false;
+    if (thread_.joinable()) {
+        thread_.join();
+    }
 }
 
-void ExecutionEngine::saveTradesToCSV(const std::string& filename) const {
-    std::ofstream file(filename);
-    file << "trade_number,profit,win,spread,strength\n";
-    for (size_t i = 0; i < trades_.size(); ++i) {
-        file << (i + 1) << ","
-             << trades_[i].profit << ","
-             << (trades_[i].win ? 1 : 0) << ","
-             << trades_[i].spread << ","
-             << trades_[i].strength << "\n";
+void ExecutionEngine::run() {
+    while (running_) {
+        std::shared_ptr<MarketEvent> event;
+        if (queue_.try_dequeue(event) && event && event->type == MarketEventType::SIGNAL) {
+            const auto& signal = std::get<TradeSignal>(event->payload);
+
+            const double fill_price = signal.price;
+            const double size = risk_engine_->getLotSize();
+            const double direction_multiplier = (signal.direction > 0) ? 1.0 : -1.0;
+            const double pnl = direction_multiplier * size * 0.0001 * fill_price;
+
+            risk_engine_->updateCapital(pnl);
+
+            logger_->logTrade(
+                signal.symbol,
+                signal.direction > 0 ? "BUY" : "SELL",
+                fill_price,
+                size,
+                pnl,
+                risk_engine_->getCapital()
+            );
+
+            std::cout << "[EXECUTION] "
+                      << (signal.direction > 0 ? "BUY" : "SELL") << " "
+                      << signal.symbol << " @ " << fill_price
+                      << " | PnL: " << pnl
+                      << " | Capital: " << risk_engine_->getCapital()
+                      << "\n";
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Light CPU load
+        }
     }
 }
 

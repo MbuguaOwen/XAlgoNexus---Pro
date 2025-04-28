@@ -1,3 +1,5 @@
+// main.cpp
+
 #include "core/messaging/MessageBus.hpp"
 #include "core/messaging/MarketEvent.hpp"
 #include "core/ingest/HistoricalReplayIngestor.hpp"
@@ -6,91 +8,77 @@
 #include "core/signal/SignalGenerator.hpp"
 #include "core/execution/ExecutionEngine.hpp"
 #include "core/logger/TradeLogger.hpp"
-#include "core/risk/RiskManagerThread.hpp"
+#include "core/risk/RiskEngine.hpp"
+#include "core/common/EventQueue.hpp"
+#include "core/common/ReplayMode.hpp"
+
 #include <thread>
 #include <memory>
 #include <iostream>
 #include <csignal>
 #include <atomic>
-#include <cstdlib>
 
-std::atomic<bool> keepRunning(true);
+namespace XAlgo {
 
-void signalHandler(int signum) {
-    std::cout << "\n[INFO] Interrupt (" << signum << ") received. Exiting gracefully...\n";
-    keepRunning = false;
-}
+    std::atomic<bool> keepRunning(true);
+
+    void signalHandler(int signum) {
+        std::cout << "\n[INFO] Interrupt signal (" << signum << ") received. Exiting gracefully..." << std::endl;
+        keepRunning = false;
+    }
+
+} // namespace XAlgo
 
 int main() {
     using namespace XAlgo;
 
-    signal(SIGINT, signalHandler);
+    // Register signal handler
+    std::signal(SIGINT, signalHandler);
 
-    const char* df = std::getenv("XALGO_DATA_FILE");
-    const char* lf = std::getenv("XALGO_LIVE_TRADES_FILE");
-    std::string dataFile = df ? df : "data/GBPUSD_ticks.csv";
-    std::string liveTrades = lf ? lf : "live_trades.csv";
-
-    std::cout << "[INFO] Data File: " << dataFile << "\n";
-    std::cout << "[INFO] Live Trades Log: " << liveTrades << "\n";
-
+    // Instantiate core communication buses
     MessageBus bus;
-    EventQueue signal_q, exec_q;
+    EventQueue spread_queue;
+    EventQueue signal_queue;
+    EventQueue execution_queue;
 
-    HistoricalReplayIngestor ingestor(&bus, dataFile);
-    if (!ingestor.isFileOpen()) return 1;
+    // Instantiate modules
+    std::string data_file = "data/GBPUSD_ticks.csv";
+    HistoricalReplayIngestor ingestor(&bus, data_file, ReplayMode::REALTIME);
 
-    TickPreprocessor preproc(&bus);
-    SpreadEngine spread(signal_q, 0.0001);
-    SignalGenerator signalGen(signal_q, exec_q);
-    ExecutionEngine execEngine;
-    TradeLogger logger(liveTrades);
+    TickPreprocessor preprocessor(bus, spread_queue);
+    SpreadEngine spreadEngine(signal_queue);
+    RiskEngine riskEngine(0.01, 10000.0); // 1% per trade risk, $10,000 starting capital
+    ExecutionEngine executionEngine(execution_queue, riskEngine);
+    SignalGenerator signalGenerator(signal_queue, execution_queue, riskEngine);
 
-    RiskEngine riskEngine(-1000.0, 5);
-    RiskManagerThread riskThread(&riskEngine, keepRunning);
-
-    execEngine.attachRiskEngine(&riskEngine);
-
-    // Launch background threads
-    std::thread tRisk(&RiskManagerThread::run, &riskThread);
-    std::thread tIngest(&HistoricalReplayIngestor::run, &ingestor);
-    std::thread tPreproc(&TickPreprocessor::run, &preproc);
-
-    std::thread tSpread([&]() {
-        while (keepRunning) {
-            std::shared_ptr<MarketEvent> event;
-            if (bus.poll(event) && event->type == MarketEventType::FOREX_TICK) {
-                const auto& tick = std::get<ForexTick>(event->payload);
-                spread.update(tick);
-            }
-        }
-        signalGen.stop();
+    // Setup Event Subscriptions
+    bus.subscribe([&](std::shared_ptr<MarketEvent> event) {
+        preprocessor.onMarketEvent(event);
     });
 
-    std::thread tSignalGen(&SignalGenerator::run, &signalGen);
-
-    std::thread tExec([&]() {
-        while (keepRunning) {
-            std::shared_ptr<MarketEvent> event;
-            if (exec_q.try_dequeue(event) && event->type == MarketEventType::EXECUTION) {
-                const auto& signal = std::get<TradeSignal>(event->payload);
-                execEngine.handleSignal(signal);
-                logger.logTrade(signal.spread, execEngine.getPnL(), signal.spread > 0.0);
-            }
+    spread_queue.enqueue_callback([&](std::shared_ptr<MarketEvent> event) {
+        if (event->type == MarketEventType::FOREX_TICK) {
+            ForexTick tick = std::get<ForexTick>(event->payload);
+            spreadEngine.update(tick);
         }
     });
 
-    // Wait for all threads to finish
-    tIngest.join();
-    tPreproc.join();
-    tSpread.join();
-    tSignalGen.join();
-    tExec.join();
-    tRisk.join();
+    // Start signal processing and execution engines
+    signalGenerator.start();
+    executionEngine.start();
 
-    logger.flush();
-    execEngine.printReport();
-    execEngine.saveTradesToCSV("summary_trades.csv");
+    std::cout << "[INFO] Starting Historical Data Replay..." << std::endl;
+    ingestor.run();  // Will stream market events into the bus
 
+    // Main loop (watchdog for shutdown)
+    while (keepRunning) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Graceful Shutdown
+    signalGenerator.stop();
+    executionEngine.stop();
+
+    std::cout << "[INFO] Shutdown complete." << std::endl;
     return 0;
 }

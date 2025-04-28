@@ -1,16 +1,18 @@
+// src/core/preprocess/TickPreprocessor.cpp
+
 #include "core/preprocess/TickPreprocessor.hpp"
 
 namespace XAlgo {
 
-TickPreprocessor::TickPreprocessor(MessageBus* bus)
-: bus_(bus)
+TickPreprocessor::TickPreprocessor(EventQueue& spread_queue)
+    : spread_queue_(spread_queue)
 {}
 
-void TickPreprocessor::run() {
-    std::shared_ptr<MarketEvent> evt;
-    while (bus_->poll(evt)) {
-        // Optional: apply normalization, timestamp adjustment, or data enrichment here
-        bus_->publish(evt);
+void TickPreprocessor::onMarketEvent(std::shared_ptr<MarketEvent> event) {
+    if (!event) return;
+
+    if (event->type == MarketEventType::FOREX_TICK) {
+        spread_queue_.enqueue(std::move(event));
     }
 }
 

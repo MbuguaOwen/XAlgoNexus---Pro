@@ -1,44 +1,63 @@
+// src/core/logger/TradeLogger.cpp
+
 #include "core/logger/TradeLogger.hpp"
-#include <fstream>
+#include <chrono>
+#include <iomanip>
+#include <ctime>
+#include <sstream>
 #include <iostream>
 
 namespace XAlgo {
 
 TradeLogger::TradeLogger(const std::string& filename)
-    : filename_(filename), header_written_(false)
-{}
-
-void TradeLogger::logTrade(double spread, double pnl, bool win) {
-    std::lock_guard<std::mutex> lock(mtx_);
-    buffer_.emplace_back(spread, pnl, win);
-}
-
-void TradeLogger::flush() {
-    std::lock_guard<std::mutex> lock(mtx_);
-
-    std::ofstream file(filename_, std::ios::app);
-    if (!file.is_open()) {
-        std::cerr << "[ERROR] Cannot open trade log file: " << filename_ << "\n";
+{
+    file_.open(filename, std::ios::out | std::ios::trunc);
+    if (!file_.is_open()) {
+        std::cerr << "[ERROR] Unable to open trade log file: " << filename << "\n";
         return;
     }
 
-    if (!header_written_) {
-        writeHeaderIfNeeded(file);
-        header_written_ = true;
-    }
-
-    for (const auto& trade : buffer_) {
-        file << std::get<0>(trade) << ","   // spread
-             << std::get<1>(trade) << ","   // pnl
-             << (std::get<2>(trade) ? 1 : 0) // win (bool to 0/1)
-             << "\n";
-    }
-
-    buffer_.clear();
+    // Write CSV header
+    file_ << "timestamp,symbol,side,price,size,pnl,capital\n";
 }
 
-void TradeLogger::writeHeaderIfNeeded(std::ofstream& file) {
-    file << "spread,pnl,win\n";
+TradeLogger::~TradeLogger() {
+    if (file_.is_open()) {
+        file_.close();
+    }
+}
+
+void TradeLogger::logTrade(const std::string& symbol,
+                           const std::string& side,
+                           double price,
+                           double size,
+                           double pnl,
+                           double capital) {
+    if (!file_.is_open()) return;
+
+    file_ << getCurrentTimestamp() << ","
+          << symbol << ","
+          << side << ","
+          << price << ","
+          << size << ","
+          << pnl << ","
+          << capital << "\n";
+
+    file_.flush(); // Optional: flush to disk immediately after each trade
+}
+
+std::string TradeLogger::getCurrentTimestamp() const {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::tm utc_tm;
+#if defined(_WIN32) || defined(_WIN64)
+    gmtime_s(&utc_tm, &now_time);
+#else
+    gmtime_r(&now_time, &utc_tm);
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&utc_tm, "%Y-%m-%dT%H:%M:%SZ");
+    return oss.str();
 }
 
 } // namespace XAlgo

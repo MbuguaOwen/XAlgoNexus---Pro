@@ -1,12 +1,12 @@
 // src/core/filters/VolatilityEstimator.cpp
 
 #include "core/filters/VolatilityEstimator.hpp"
-#include <cmath>    // for std::sqrt
+#include <cmath>    // For std::sqrt
 
 namespace XAlgo {
 
 VolatilityEstimator::VolatilityEstimator(std::size_t window_size)
-    : window_size_(window_size), index_(0), count_(0), sum_(0.0), sum_sq_(0.0) 
+    : window_size_(window_size)
 {
     buffer_.resize(window_size_, 0.0);
 }
@@ -28,10 +28,16 @@ void VolatilityEstimator::addSample(double value) {
 }
 
 double VolatilityEstimator::getVolatility() const {
-    if (count_ < 2) return 0.0;
+    if (count_ < 2) {
+        return 0.0;
+    }
 
     double mean = sum_ / static_cast<double>(count_);
-    double variance = (sum_sq_ - 2.0 * mean * sum_ + mean * mean * static_cast<double>(count_)) / (count_ - 1);
+    double mean_sq = mean * mean;
+    double variance = (sum_sq_ / static_cast<double>(count_)) - mean_sq;
+
+    // Defensive programming: avoid negative variance due to floating-point errors
+    if (variance < 0.0) variance = 0.0;
 
     return std::sqrt(variance);
 }

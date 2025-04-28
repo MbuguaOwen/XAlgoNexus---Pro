@@ -1,21 +1,54 @@
+// src/core/risk/RiskEngine.hpp
+
 #pragma once
-#include <mutex>
+
+/**
+ * @file RiskEngine.hpp
+ * @brief Handles account capital, lot sizing, and bankruptcy detection.
+ */
 
 namespace XAlgo {
 
+/**
+ * @class RiskEngine
+ * @brief Manages trading risk exposure and monitors available capital.
+ */
 class RiskEngine {
 public:
-    RiskEngine(double max_loss);
+    /**
+     * @brief Constructor.
+     * @param risk_percent Risk per trade expressed as a percentage of capital.
+     * @param initial_capital Starting account balance.
+     */
+    RiskEngine(double risk_percent, double initial_capital);
 
-    void updatePosition(double pnl_delta);
-    bool isActive() const;
+    /**
+     * @brief Get the current capital value.
+     * @return Available capital.
+     */
+    [[nodiscard]] double getCapital() const;
 
-    void reset(); // Optional reset for simulation/testing
+    /**
+     * @brief Update capital after a trade's profit or loss.
+     * @param pnl Profit or loss from the last trade.
+     */
+    void updateCapital(double pnl);
+
+    /**
+     * @brief Calculate the lot size based on current capital and risk settings.
+     * @return Lot size.
+     */
+    [[nodiscard]] double getLotSize() const;
+
+    /**
+     * @brief Determine if the account has gone bankrupt.
+     * @return True if capital <= 0, else false.
+     */
+    [[nodiscard]] bool isBankrupt() const;
 
 private:
-    double             max_loss_;
-    double             cumulative_pnl_;
-    mutable std::mutex mtx_;
+    double risk_percent_; ///< Risk per trade (% of current capital).
+    double capital_; ///< Current account balance.
 };
 
 } // namespace XAlgo

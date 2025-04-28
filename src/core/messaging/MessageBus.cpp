@@ -4,7 +4,12 @@
 
 namespace XAlgo {
 
-// No implementation needed yet.
-// This file exists to satisfy the linker and CMake.
+MessageBus::MessageBus() = default;
 
+void MessageBus::publish(std::shared_ptr<MarketEvent> event) {
+    if (callback_) {
+        callback_(std::move(event));
+    }
 }
+
+} // namespace XAlgo

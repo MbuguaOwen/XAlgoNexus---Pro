@@ -1,20 +1,52 @@
+// src/core/risk/RiskManagerThread.hpp
+
 #pragma once
+
+/**
+ * @file RiskManagerThread.hpp
+ * @brief Background thread to monitor system-wide risk and trigger shutdowns if necessary.
+ */
 
 #include "core/risk/RiskEngine.hpp"
 #include <atomic>
+#include <thread>
 
 namespace XAlgo {
 
-// Periodically checks RiskEngine and can stop trading by flipping a flag.
+/**
+ * @class RiskManagerThread
+ * @brief Periodically monitors account health and shuts down system if bankruptcy occurs.
+ */
 class RiskManagerThread {
 public:
-    RiskManagerThread(RiskEngine* engine, std::atomic<bool>& keepRunning);
+    /**
+     * @brief Constructor.
+     * @param risk_engine Pointer to the RiskEngine for monitoring.
+     * @param running_flag Shared atomic flag controlling system status.
+     */
+    RiskManagerThread(RiskEngine* risk_engine, std::atomic<bool>& running_flag);
 
-    void run();
+    /**
+     * @brief Destructor.
+     */
+    ~RiskManagerThread();
+
+    /**
+     * @brief Start the risk monitoring thread.
+     */
+    void start();
+
+    /**
+     * @brief Stop the risk monitoring thread.
+     */
+    void stop();
 
 private:
-    RiskEngine* engine_;
-    std::atomic<bool>& keepRunning_;
+    void monitor(); ///< Internal monitoring loop.
+
+    RiskEngine* risk_engine_; ///< Associated RiskEngine instance.
+    std::atomic<bool>& running_; ///< Reference to global running control.
+    std::thread thread_; ///< Monitoring background thread.
 };
 
 } // namespace XAlgo

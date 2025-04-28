@@ -1,24 +1,29 @@
+// src/core/risk/RiskEngine.cpp
+
 #include "core/risk/RiskEngine.hpp"
 
 namespace XAlgo {
 
-RiskEngine::RiskEngine(double max_loss)
-  : max_loss_(max_loss), cumulative_pnl_(0.0)
+RiskEngine::RiskEngine(double risk_percent, double initial_capital)
+    : risk_percent_(risk_percent),
+      capital_(initial_capital)
 {}
 
-void RiskEngine::updatePosition(double pnl_delta) {
-    std::lock_guard lock(mtx_);
-    cumulative_pnl_ += pnl_delta;
+double RiskEngine::getCapital() const {
+    return capital_;
 }
 
-bool RiskEngine::isActive() const {
-    std::lock_guard lock(mtx_);
-    return cumulative_pnl_ > max_loss_; // Trading active if cumulative loss has not exceeded max_loss
+void RiskEngine::updateCapital(double pnl) {
+    capital_ += pnl;
 }
 
-void RiskEngine::reset() {
-    std::lock_guard lock(mtx_);
-    cumulative_pnl_ = 0.0;
+double RiskEngine::getLotSize() const {
+    // Simplified pip-value model: 1000 USD per pip (e.g., EUR/USD)
+    return (capital_ * risk_percent_) / 1000.0;
+}
+
+bool RiskEngine::isBankrupt() const {
+    return capital_ <= 0.0;
 }
 
 } // namespace XAlgo

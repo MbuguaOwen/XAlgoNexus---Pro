@@ -1,49 +1,57 @@
+// src/core/execution/ExecutionEngine.hpp
+
 #pragma once
 
+/**
+ * @file ExecutionEngine.hpp
+ * @brief Module responsible for consuming trade signals and executing simulated trades.
+ */
+
 #include "core/messaging/MarketEvent.hpp"
+#include "core/logger/TradeLogger.hpp"
 #include "core/risk/RiskEngine.hpp"
-#include <vector>
-#include <random>
-#include <string>
+#include <memory>
+#include <atomic>
+#include <thread>
 
 namespace XAlgo {
 
-struct TradeRecord {
-    double profit;
-    bool win;
-    double spread;
-    double strength;
-};
-
+/**
+ * @class ExecutionEngine
+ * @brief Executes trades based on incoming trade signals, manages PnL, and logs execution details.
+ */
 class ExecutionEngine {
 public:
-    ExecutionEngine();
-    ExecutionEngine(double sl_mean, double sl_std, int latency, double fill_prob, double max_dd);
+    /**
+     * @brief Constructor.
+     * @param queue Event queue receiving trade signals.
+     * @param risk_engine Pointer to the associated RiskEngine instance.
+     */
+    ExecutionEngine(EventQueue& queue, RiskEngine* risk_engine);
 
-    void attachRiskEngine(RiskEngine* engine);
-    void handleSignal(const TradeSignal& signal);
+    /**
+     * @brief Destructor (ensures clean shutdown).
+     */
+    ~ExecutionEngine();
 
-    double getPnL() const { return pnl_; }
-    void printReport() const;
-    void saveTradesToCSV(const std::string& filename) const;
+    /**
+     * @brief Start the execution engine loop in a separate thread.
+     */
+    void start();
+
+    /**
+     * @brief Stop the execution engine loop and join the thread.
+     */
+    void stop();
 
 private:
-    double pnl_;
-    double max_pnl_;
-    double slippage_mean_;
-    double slippage_stddev_;
-    int latency_ms_;
-    double fill_probability_;
-    double max_drawdown_;
-    bool trading_active_;
+    void run(); ///< Internal event-processing loop.
 
-    RiskEngine* riskEngine_;
-
-    std::mt19937 rng_;
-    std::normal_distribution<double> slippage_dist_;
-    std::uniform_real_distribution<double> random_fill_dist_;
-
-    std::vector<TradeRecord> trades_;
+    EventQueue& queue_; ///< Event queue with trade signals.
+    std::unique_ptr<TradeLogger> logger_; ///< Responsible for persisting executed trades.
+    RiskEngine* risk_engine_; ///< Manages capital updates and risk constraints.
+    std::atomic<bool> running_; ///< Running flag for the thread loop.
+    std::thread thread_; ///< Background worker thread.
 };
 
 } // namespace XAlgo
