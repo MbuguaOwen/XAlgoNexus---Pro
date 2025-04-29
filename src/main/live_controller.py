@@ -1,7 +1,10 @@
-# /src/main/live_controller.py
+# /src/main/live_controller.py (Updated with /metrics endpoint)
 
 import asyncio
 import logging
+from fastapi import FastAPI
+from prometheus_client import Gauge, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
 
 from data_pipeline.binance_ingestor import connect_and_listen as binance_feed
 from data_pipeline.coinbase_ingestor import connect_and_listen as coinbase_feed
@@ -16,6 +19,15 @@ from data_pipeline.timescaledb_adapter import TimescaleDBAdapter
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("live_controller")
 
+# FastAPI app for /metrics exposure
+app = FastAPI()
+
+# Prometheus Gauges
+spread_gauge = Gauge('xalgo_latest_spread', 'Latest spread value')
+volatility_gauge = Gauge('xalgo_latest_volatility', 'Latest volatility value')
+imbalance_gauge = Gauge('xalgo_latest_imbalance', 'Latest imbalance value')
+pnl_gauge = Gauge('xalgo_daily_pnl', 'Daily cumulative PnL')
+
 # Initialize system components
 normalizer = DataNormalizer()
 feature_engineer = FeatureEngineer()
@@ -25,7 +37,7 @@ execution_router = ExecutionRouter()
 
 db_config = {
     'user': 'postgres',
-    'password': 'yourpassword',
+    'password': '11230428018',
     'database': 'xalgo_trading',
     'host': 'localhost',
     'port': 5432
@@ -46,20 +58,27 @@ async def process_event(event):
         if feature:
             await storage_adapter.insert_feature_vector(feature)
 
+            # Update Prometheus metrics
+            spread_gauge.set(feature["spread"])
+            volatility_gauge.set(feature["volatility"])
+            imbalance_gauge.set(feature["imbalance"])
+
             # Generate trading signal
             signal = signal_generator.generate_signal(feature)
 
             # Risk check and execution
             if signal and signal['decision'] != 'HOLD':
-                base_price = feature['spread']  # Placeholder: use real price feed for execution
-                quantity_usd = 1000.0  # Example fixed amount per trade
-                slippage_estimate = 0.0005  # Placeholder slippage
+                base_price = feature['spread']  # Placeholder: real price input needed
+                quantity_usd = 1000.0
+                slippage_estimate = 0.0005
 
                 if risk_manager.check_trade_permission(signal, quantity_usd, slippage_estimate):
                     order = execution_router.simulate_order_execution(signal, base_price, quantity_usd)
                     if order:
                         await storage_adapter.insert_execution_order(order)
-                        risk_manager.update_pnl((order['filled_price'] - order['requested_price']) * quantity_usd)
+                        pnl_delta = (order['filled_price'] - order['requested_price']) * quantity_usd
+                        risk_manager.update_pnl(pnl_delta)
+                        pnl_gauge.set(risk_manager.daily_pnl)
 
     except Exception as e:
         logger.error(f"[LIVE_CONTROLLER] Error processing event: {e}")
@@ -74,9 +93,14 @@ async def main():
 
     await asyncio.gather(binance_task, coinbase_task)
 
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 if __name__ == "__main__":
+    import uvicorn
     try:
-        asyncio.run(main())
+        uvicorn.run("main.live_controller:app", host="0.0.0.0", port=9100, reload=False)
     except KeyboardInterrupt:
         logger.info("Shutdown requested by user.")
     except Exception as e:

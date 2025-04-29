@@ -1,0 +1,65 @@
+# /infra/docker-compose.yml
+
+version: '3.8'
+
+services:
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: timescaledb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_DB: xalgo_trading
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana_dashboard.json:/etc/grafana/provisioning/dashboards/grafana_dashboard.json
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  live_controller:
+    build:
+      context: ../
+      dockerfile: ./infra/docker/Dockerfile
+    container_name: live_controller
+    ports:
+      - "9100:9100"
+    environment:
+      DB_HOST: timescaledb
+      DB_USER: postgres
+      DB_PASSWORD: yourpassword
+      DB_NAME: xalgo_trading
+    depends_on:
+      - timescaledb
+    restart: unless-stopped
+
+volumes:
+  timescale_data:
+
+# Note:
+# - Adjust Dockerfile location if necessary.
+# - PostgreSQL exporter service can be added later if deeper DB metrics needed.
+# - Assumes proper Dockerfile for live_controller already exists (can generate next).
