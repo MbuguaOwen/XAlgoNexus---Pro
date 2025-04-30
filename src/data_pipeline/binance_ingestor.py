@@ -15,11 +15,19 @@ logging.basicConfig(level=logging.INFO)
 PAIRS = ["btcusdt", "ethusdt", "ethbtc"]
 WS_URL = "wss://stream.binance.com:9443/ws"
 
+def build_subscription():
+    streams = [f"{pair}@depth5@100ms" for pair in PAIRS] + [f"{pair}@trade" for pair in PAIRS]
+    return {
+        "method": "SUBSCRIBE",
+        "params": streams,
+        "id": int(time.time())
+    }
+
 class BinanceIngestor:
     def __init__(self, db_conn):
         self.db_conn = db_conn
         self.db_cursor = db_conn.cursor()
-        self.feature_engineer = FeatureEngineer()
+        self.feature_engineer = FeatureEngineer(db_conn)
 
     def store_features(self, fv):
         sql = """
@@ -35,7 +43,6 @@ class BinanceIngestor:
             self.db_conn.rollback()
 
     async def process_event(self, event):
-        # Feature extraction
         fv = self.feature_engineer.update(event)
         if fv:
             logger.info(f"[FEATURES] {fv}")
@@ -76,10 +83,14 @@ class BinanceIngestor:
                 logger.warning(f"[BINANCE] Reconnecting in 5s due to: {e}")
                 await asyncio.sleep(5)
 
-def build_subscription():
-    streams = [f"{pair}@depth5@100ms" for pair in PAIRS] + [f"{pair}@trade" for pair in PAIRS]
-    return {
-        "method": "SUBSCRIBE",
-        "params": streams,
-        "id": int(time.time())
-    }
+# ✅ Entry point function expected by live_controller
+async def connect_and_listen(process_event_func):
+    db_conn = psycopg2.connect(
+        dbname="xalgo_trading_db",
+        user="postgres",
+        password="11230428018",
+        host="timescaledb",
+        port="5432"
+    )
+    ingestor = BinanceIngestor(db_conn)
+    await ingestor.connect_and_listen()
