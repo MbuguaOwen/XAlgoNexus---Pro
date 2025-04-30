@@ -5,20 +5,19 @@ import websockets
 import json
 import logging
 import time
-from datetime import datetime
+from data_pipeline.data_normalizer import DataNormalizer
 
-# Configure basic logger
+# Configure logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("binance_ingestor")
 
-# Binance WebSocket Endpoints
-BINANCE_WS_URL = "wss://stream.binance.com:9443/stream"
-
-# Trading pairs to monitor
 PAIRS = ["btcusdt", "ethusdt", "ethbtc"]
+WS_URL = "wss://stream.binance.com:9443/ws"
 
-# Build subscription payload
 def build_subscription():
+    """
+    Constructs the Binance WebSocket subscription message.
+    """
     streams = [f"{pair}@depth5@100ms" for pair in PAIRS] + [f"{pair}@trade" for pair in PAIRS]
     return {
         "method": "SUBSCRIBE",
@@ -26,60 +25,62 @@ def build_subscription():
         "id": int(time.time())
     }
 
-async def handle_message(message: dict):
-    event_type = message.get('e')
+async def handle_message(message: dict, process_event_func):
+    """
+    Handles a single parsed WebSocket event and passes it through the normalization + processing pipeline.
+    """
+    try:
+        event_type = message.get("e")
 
-    if event_type == 'depthUpdate':
-        logger.info(f"[ORDERBOOK] {message['s']} | Bids: {message['b'][0]} | Asks: {message['a'][0]}")
+        if event_type == "trade":
+            event = DataNormalizer.normalize_binance_trade(message)
+            await process_event_func(event)
+            logger.info(f"[TRADE] {event.pair} | Price: {event.price} | Qty: {event.quantity}")
 
-    elif event_type == 'trade':
-        logger.info(f"[TRADE] {message['s']} | Price: {message['p']} | Quantity: {message['q']}")
+        elif event_type == "depthUpdate":
+            event = DataNormalizer.normalize_binance_orderbook(message)
+            await process_event_func(event)
+            logger.info(f"[ORDERBOOK] {event.pair} | Bids: {event.bids[0]} | Asks: {event.asks[0]}")
 
-async def connect_and_listen():
-    logger.info("[BINANCE] Feed started...")
+        else:
+            logger.debug(f"[BINANCE] Ignored event type: {event_type}")
 
-    uri = f"{BINANCE_WS_URL}?streams=" + "/".join([f"{pair}@depth5@100ms/{pair}@trade" for pair in PAIRS])
-    
+    except Exception as e:
+        logger.exception(f"[BINANCE] Failed to handle message: {e}")
+
+async def connect_and_listen(process_event_func):
+    """
+    Connects to Binance WebSocket and subscribes to desired market data streams.
+    For each message, it routes it to the handler pipeline.
+    """
+    logger.info("[BINANCE] Connecting to WebSocket...")
+
     while True:
         try:
-            async with websockets.connect(uri, ping_interval=20, ping_timeout=10) as websocket:
-                logger.info("Connected to Binance WebSocket.")
+            async with websockets.connect(WS_URL, ping_interval=20, ping_timeout=10) as websocket:
+                logger.info("[BINANCE] Connected. Sending subscription request...")
+                await websocket.send(json.dumps(build_subscription()))
+                logger.info("[BINANCE] Subscribed to streams.")
 
                 while True:
                     raw = await websocket.recv()
-                    logger.info(f"[BINANCE] Raw message received")
                     message = json.loads(raw)
 
-                    if 'data' in message:
-                        logger.info(f"[BINANCE] Parsed data: {message['data'].get('e')}")
-                        await handle_message(message['data'])
+                    # Handle both raw and combined stream formats
+                    if "e" in message:
+                        await handle_message(message, process_event_func)
+                    elif "data" in message:
+                        await handle_message(message["data"], process_event_func)
+                    else:
+                        logger.debug(f"[BINANCE] Unrecognized message format: {message}")
 
         except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError) as e:
-            logger.warning(f"Connection lost, retrying in 5 seconds: {e}")
+            logger.warning(f"[BINANCE] Disconnected. Reconnecting in 5s... Reason: {e}")
             await asyncio.sleep(5)
-    
-    uri = f"{BINANCE_WS_URL}?streams=" + "/".join([f"{pair}@depth5@100ms/{pair}@trade" for pair in PAIRS])
-    
-    while True:
-        try:
-            async with websockets.connect(uri, ping_interval=20, ping_timeout=10) as websocket:
-                logger.info("Connected to Binance WebSocket.")
 
-                while True:
-                    raw = await websocket.recv()
-                    message = json.loads(raw)
-
-                    if 'data' in message:
-                        await handle_message(message['data'])
-
-        except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError) as e:
-            logger.warning(f"Connection lost, retrying in 5 seconds: {e}")
+        except Exception as e:
+            logger.exception(f"[BINANCE] Unexpected failure: {e}")
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(connect_and_listen())
-    except KeyboardInterrupt:
-        logger.info("Shutdown requested, exiting...")
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
+    logger.warning("Run this module from live_controller.py by passing in process_event().")

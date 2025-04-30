@@ -8,7 +8,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("data_normalizer")
 
 class NormalizedEvent:
-    def __init__(self, timestamp, exchange, event_type, pair, price, quantity, side=None, bids=None, asks=None):
+    def __init__(self, timestamp, exchange, event_type, pair, price, quantity,
+                 side=None, bids=None, asks=None):
         self.timestamp = timestamp
         self.exchange = exchange
         self.event_type = event_type  # 'trade' or 'orderbook'
@@ -36,6 +37,9 @@ class DataNormalizer:
 
     @staticmethod
     def normalize_binance_trade(msg: dict) -> NormalizedEvent:
+        """
+        Normalize Binance trade event
+        """
         return NormalizedEvent(
             timestamp=datetime.utcfromtimestamp(msg['T'] / 1000),
             exchange="binance",
@@ -48,6 +52,9 @@ class DataNormalizer:
 
     @staticmethod
     def normalize_binance_orderbook(msg: dict) -> NormalizedEvent:
+        """
+        Normalize Binance order book (depthUpdate) event
+        """
         return NormalizedEvent(
             timestamp=datetime.utcfromtimestamp(msg['E'] / 1000),
             exchange="binance",
@@ -55,9 +62,9 @@ class DataNormalizer:
             pair=msg['s'].lower(),
             price=None,
             quantity=None,
-            bids=msg['b'],
-            asks=msg['a']
+            bids=msg.get('b', []),
+            asks=msg.get('a', [])
         )
 
 if __name__ == "__main__":
-    logger.info("Binance-only Data Normalizer Ready.")
+    logger.info("Binance Data Normalizer Ready.")
