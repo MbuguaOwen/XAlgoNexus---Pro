@@ -1,13 +1,13 @@
-# /src/main/live_controller.py (Updated with /metrics endpoint)
+# /src/main/live_controller.py (Production-Grade Binance-Only Version)
 
 import asyncio
 import logging
 from fastapi import FastAPI
-from prometheus_client import Gauge, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from metrics.metrics import spread_gauge, volatility_gauge, imbalance_gauge, pnl_gauge
 
 from data_pipeline.binance_ingestor import connect_and_listen as binance_feed
-from data_pipeline.coinbase_ingestor import connect_and_listen as coinbase_feed
 from data_pipeline.data_normalizer import DataNormalizer
 from feature_engineering.feature_engineer import FeatureEngineer
 from strategy_core.signal_generator import SignalGenerator
@@ -16,17 +16,11 @@ from execution_layer.execution_router import ExecutionRouter
 from data_pipeline.timescaledb_adapter import TimescaleDBAdapter
 
 # Configure logger
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("live_controller")
 
 # FastAPI app for /metrics exposure
 app = FastAPI()
-
-# Prometheus Gauges
-spread_gauge = Gauge('xalgo_latest_spread', 'Latest spread value')
-volatility_gauge = Gauge('xalgo_latest_volatility', 'Latest volatility value')
-imbalance_gauge = Gauge('xalgo_latest_imbalance', 'Latest imbalance value')
-pnl_gauge = Gauge('xalgo_daily_pnl', 'Daily cumulative PnL')
 
 # Initialize system components
 normalizer = DataNormalizer()
@@ -68,7 +62,7 @@ async def process_event(event):
 
             # Risk check and execution
             if signal and signal['decision'] != 'HOLD':
-                base_price = feature['spread']  # Placeholder: real price input needed
+                base_price = feature['spread']  # Placeholder: replace with actual price reference
                 quantity_usd = 1000.0
                 slippage_estimate = 0.0005
 
@@ -87,11 +81,9 @@ async def main():
     logger.info("Starting Live Controller...")
     await storage_adapter.init_pool()
 
-    # Run Binance and Coinbase listeners concurrently
-    binance_task = asyncio.create_task(binance_feed())
-    coinbase_task = asyncio.create_task(coinbase_feed())
-
-    await asyncio.gather(binance_task, coinbase_task)
+    # Run Binance WebSocket listener
+    binance_task = asyncio.create_task(binance_feed(process_event))
+    await asyncio.gather(binance_task)
 
 @app.get("/metrics")
 def metrics():

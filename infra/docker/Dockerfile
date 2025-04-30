@@ -6,6 +6,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV PYTHONPATH="/app/src"
 
 # Set working directory
 WORKDIR /app
@@ -24,4 +25,4 @@ COPY infra/monitoring/ /app/monitoring/
 EXPOSE 9100
 
 # Set default command to run Live Controller
-CMD ["python", "src/main/live_controller.py"]
+CMD ["python", "-m", "main.live_controller"]

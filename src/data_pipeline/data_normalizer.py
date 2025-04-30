@@ -43,13 +43,11 @@ class DataNormalizer:
             pair=msg['s'].lower(),
             price=float(msg['p']),
             quantity=float(msg['q']),
-            side=msg['m'] and 'sell' or 'buy'
+            side='sell' if msg['m'] else 'buy'
         )
 
     @staticmethod
     def normalize_binance_orderbook(msg: dict) -> NormalizedEvent:
-        best_bid = float(msg['b'][0][0]) if msg['b'] else None
-        best_ask = float(msg['a'][0][0]) if msg['a'] else None
         return NormalizedEvent(
             timestamp=datetime.utcfromtimestamp(msg['E'] / 1000),
             exchange="binance",
@@ -61,32 +59,5 @@ class DataNormalizer:
             asks=msg['a']
         )
 
-    @staticmethod
-    def normalize_coinbase_trade(msg: dict) -> NormalizedEvent:
-        return NormalizedEvent(
-            timestamp=datetime.strptime(msg['time'], "%Y-%m-%dT%H:%M:%S.%fZ"),
-            exchange="coinbase",
-            event_type="trade",
-            pair=msg['product_id'].replace('-', '').lower(),
-            price=float(msg['price']),
-            quantity=float(msg['size']),
-            side=msg['side']
-        )
-
-    @staticmethod
-    def normalize_coinbase_orderbook(msg: dict) -> NormalizedEvent:
-        changes = msg['changes']
-        # Coinbase sends [side, price, size] updates
-        side, price, quantity = changes[0]
-        return NormalizedEvent(
-            timestamp=datetime.strptime(msg['time'], "%Y-%m-%dT%H:%M:%S.%fZ"),
-            exchange="coinbase",
-            event_type="orderbook",
-            pair=msg['product_id'].replace('-', '').lower(),
-            price=float(price),
-            quantity=float(quantity),
-            side=side
-        )
-
 if __name__ == "__main__":
-    logger.info("Data Normalizer Module Ready.")
+    logger.info("Binance-only Data Normalizer Ready.")

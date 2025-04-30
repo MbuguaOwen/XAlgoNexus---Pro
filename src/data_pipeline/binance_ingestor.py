@@ -36,6 +36,28 @@ async def handle_message(message: dict):
         logger.info(f"[TRADE] {message['s']} | Price: {message['p']} | Quantity: {message['q']}")
 
 async def connect_and_listen():
+    logger.info("[BINANCE] Feed started...")
+
+    uri = f"{BINANCE_WS_URL}?streams=" + "/".join([f"{pair}@depth5@100ms/{pair}@trade" for pair in PAIRS])
+    
+    while True:
+        try:
+            async with websockets.connect(uri, ping_interval=20, ping_timeout=10) as websocket:
+                logger.info("Connected to Binance WebSocket.")
+
+                while True:
+                    raw = await websocket.recv()
+                    logger.info(f"[BINANCE] Raw message received")
+                    message = json.loads(raw)
+
+                    if 'data' in message:
+                        logger.info(f"[BINANCE] Parsed data: {message['data'].get('e')}")
+                        await handle_message(message['data'])
+
+        except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError) as e:
+            logger.warning(f"Connection lost, retrying in 5 seconds: {e}")
+            await asyncio.sleep(5)
+    
     uri = f"{BINANCE_WS_URL}?streams=" + "/".join([f"{pair}@depth5@100ms/{pair}@trade" for pair in PAIRS])
     
     while True:

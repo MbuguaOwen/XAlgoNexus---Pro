@@ -4,3 +4,6 @@ asyncpg
 sqlalchemy
 pydantic
 prometheus-client
+numpy
+pandas
+scipy
