@@ -5,82 +5,81 @@ import websockets
 import json
 import logging
 import time
+import psycopg2
 from data_pipeline.data_normalizer import DataNormalizer
+from feature_engineering.feature_engineer import FeatureEngineer
 
-# Configure logger
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("binance_ingestor")
+logging.basicConfig(level=logging.INFO)
 
 PAIRS = ["btcusdt", "ethusdt", "ethbtc"]
 WS_URL = "wss://stream.binance.com:9443/ws"
 
+class BinanceIngestor:
+    def __init__(self, db_conn):
+        self.db_conn = db_conn
+        self.db_cursor = db_conn.cursor()
+        self.feature_engineer = FeatureEngineer()
+
+    def store_features(self, fv):
+        sql = """
+            INSERT INTO feature_vectors (timestamp, spread, volatility, imbalance)
+            VALUES (%s, %s, %s, %s)
+        """
+        values = (fv['timestamp'], fv['spread'], float(fv['volatility']), fv['imbalance'])
+        try:
+            self.db_cursor.execute(sql, values)
+            self.db_conn.commit()
+        except Exception as e:
+            logger.error(f"[DB] Feature vector insert failed: {e}")
+            self.db_conn.rollback()
+
+    async def process_event(self, event):
+        # Feature extraction
+        fv = self.feature_engineer.update(event)
+        if fv:
+            logger.info(f"[FEATURES] {fv}")
+            self.store_features(fv)
+
+    async def handle_message(self, message: dict):
+        try:
+            if message.get("e") == "trade":
+                event = DataNormalizer.normalize_binance_trade(message)
+                await self.process_event(event)
+                logger.info(f"[TRADE] {event.pair} | Price: {event.price} | Qty: {event.quantity}")
+            elif message.get("e") == "depthUpdate":
+                event = DataNormalizer.normalize_binance_orderbook(message)
+                await self.process_event(event)
+                logger.info(f"[ORDERBOOK] {event.pair} | Bids: {event.bids[0]} | Asks: {event.asks[0]}")
+            else:
+                logger.debug(f"[BINANCE] Unknown event: {message}")
+        except Exception as e:
+            logger.exception(f"[BINANCE] Message handling failed: {e}")
+
+    async def connect_and_listen(self):
+        while True:
+            try:
+                async with websockets.connect(WS_URL, ping_interval=20, ping_timeout=10) as websocket:
+                    logger.info("[BINANCE] Connected to stream")
+                    await websocket.send(json.dumps(build_subscription()))
+                    logger.info("[BINANCE] Subscribed to pairs")
+
+                    while True:
+                        raw = await websocket.recv()
+                        msg = json.loads(raw)
+
+                        if "e" in msg:
+                            await self.handle_message(msg)
+                        elif "data" in msg:
+                            await self.handle_message(msg["data"])
+            except Exception as e:
+                logger.warning(f"[BINANCE] Reconnecting in 5s due to: {e}")
+                await asyncio.sleep(5)
+
 def build_subscription():
-    """
-    Constructs the Binance WebSocket subscription message.
-    """
     streams = [f"{pair}@depth5@100ms" for pair in PAIRS] + [f"{pair}@trade" for pair in PAIRS]
     return {
         "method": "SUBSCRIBE",
         "params": streams,
         "id": int(time.time())
     }
-
-async def handle_message(message: dict, process_event_func):
-    """
-    Handles a single parsed WebSocket event and passes it through the normalization + processing pipeline.
-    """
-    try:
-        event_type = message.get("e")
-
-        if event_type == "trade":
-            event = DataNormalizer.normalize_binance_trade(message)
-            await process_event_func(event)
-            logger.info(f"[TRADE] {event.pair} | Price: {event.price} | Qty: {event.quantity}")
-
-        elif event_type == "depthUpdate":
-            event = DataNormalizer.normalize_binance_orderbook(message)
-            await process_event_func(event)
-            logger.info(f"[ORDERBOOK] {event.pair} | Bids: {event.bids[0]} | Asks: {event.asks[0]}")
-
-        else:
-            logger.debug(f"[BINANCE] Ignored event type: {event_type}")
-
-    except Exception as e:
-        logger.exception(f"[BINANCE] Failed to handle message: {e}")
-
-async def connect_and_listen(process_event_func):
-    """
-    Connects to Binance WebSocket and subscribes to desired market data streams.
-    For each message, it routes it to the handler pipeline.
-    """
-    logger.info("[BINANCE] Connecting to WebSocket...")
-
-    while True:
-        try:
-            async with websockets.connect(WS_URL, ping_interval=20, ping_timeout=10) as websocket:
-                logger.info("[BINANCE] Connected. Sending subscription request...")
-                await websocket.send(json.dumps(build_subscription()))
-                logger.info("[BINANCE] Subscribed to streams.")
-
-                while True:
-                    raw = await websocket.recv()
-                    message = json.loads(raw)
-
-                    # Handle both raw and combined stream formats
-                    if "e" in message:
-                        await handle_message(message, process_event_func)
-                    elif "data" in message:
-                        await handle_message(message["data"], process_event_func)
-                    else:
-                        logger.debug(f"[BINANCE] Unrecognized message format: {message}")
-
-        except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError) as e:
-            logger.warning(f"[BINANCE] Disconnected. Reconnecting in 5s... Reason: {e}")
-            await asyncio.sleep(5)
-
-        except Exception as e:
-            logger.exception(f"[BINANCE] Unexpected failure: {e}")
-            await asyncio.sleep(5)
-
-if __name__ == "__main__":
-    logger.warning("Run this module from live_controller.py by passing in process_event().")
