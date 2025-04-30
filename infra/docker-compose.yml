@@ -4,13 +4,13 @@ version: '3.8'
 
 services:
 
-  timescaledb:
+  xalgo_trading_db:
     image: timescale/timescaledb:latest-pg14
     container_name: timescaledb
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: yourpassword
-      POSTGRES_DB: xalgo_trading
+      POSTGRES_PASSWORD: 11230428018
+      POSTGRES_DB: xalgo_trading_db
     ports:
       - "5432:5432"
     volumes:
@@ -48,12 +48,12 @@ services:
     ports:
       - "9100:9100"
     environment:
-      DB_HOST: timescaledb
+      DB_HOST: xalgo_trading_db
       DB_USER: postgres
-      DB_PASSWORD: yourpassword
+      DB_PASSWORD: 11230428018
       DB_NAME: xalgo_trading
     depends_on:
-      - timescaledb
+      - xalgo_trading_db
     restart: unless-stopped
 
 volumes:
