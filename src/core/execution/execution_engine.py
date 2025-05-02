@@ -1,6 +1,6 @@
-
 from datetime import datetime
 from prometheus_client import Counter
+from core.execution_layer.pnl_tracker import PnLTracker
 
 # Prometheus metrics
 execution_counter = Counter('xalgo_trades_executed_total', 'Total trades executed', ['mode', 'type'])
@@ -10,6 +10,7 @@ class ExecutionEngine:
         self.mode = mode  # "live" or "paper"
         self.logger = logger or print
         self.trade_log = []
+        self.pnl_tracker = PnLTracker()
 
     def execute(self, signal):
         trade_details = {
@@ -21,6 +22,14 @@ class ExecutionEngine:
 
         execution_counter.labels(mode=self.mode, type=signal.signal_type).inc()
 
+        # Extract trade metadata (required for PnL tracking)
+        symbol = signal.metadata.get('pair', 'btcusdt')
+        price = signal.metadata.get('price', 0)
+        qty = signal.metadata.get('quantity', 0)
+        side = signal.metadata.get('side', 'buy')
+
+        self.pnl_tracker.update_position(symbol, price, qty, side)
+
         if self.mode == "live":
             self.logger(f"[LIVE] Executing: {trade_details}")
         else:
@@ -30,3 +39,6 @@ class ExecutionEngine:
 
     def get_trade_log(self):
         return self.trade_log
+
+    def get_pnl_summary(self):
+        return self.pnl_tracker.summary()
