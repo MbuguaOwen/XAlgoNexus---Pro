@@ -1,0 +1,44 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "type": "dashboard",
+          "name": "Annotations & Alerts",
+          "enable": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Signals Emitted (by Type)",
+        "targets": [
+          {
+            "expr": "xalgo_signals_emitted_total",
+            "legendFormat": "{{type}}",
+            "interval": "",
+            "refId": "A"
+          }
+        ],
+        "id": 1
+      },
+      {
+        "type": "graph",
+        "title": "Trades Executed (by Mode)",
+        "targets": [
+          {
+            "expr": "xalgo_trades_executed_total",
+            "legendFormat": "{{mode}} {{type}}",
+            "interval": "",
+            "refId": "B"
+          }
+        ],
+        "id": 2
+      }
+    ],
+    "title": "XAlgoNexus HFT Monitor",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s"
+  }

@@ -7,7 +7,13 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("data_normalizer")
 
+
 class NormalizedEvent:
+    """
+    Represents a normalized market event, such as a trade or order book snapshot,
+    ready for feature engineering or database insertion.
+    """
+
     def __init__(self, timestamp, exchange, event_type, pair, price, quantity,
                  side=None, bids=None, asks=None):
         self.timestamp = timestamp
@@ -33,12 +39,24 @@ class NormalizedEvent:
             "asks": self.asks
         }
 
+
 class DataNormalizer:
+    """
+    Static utility class to normalize raw Binance WebSocket messages into
+    XAlgo's internal event schema.
+    """
 
     @staticmethod
     def normalize_binance_trade(msg: dict) -> NormalizedEvent:
         """
-        Normalize Binance trade event
+        Normalize Binance trade event payload.
+
+        Example input:
+        {
+          'e': 'trade', 'E': 123456789, 's': 'BTCUSDT',
+          't': 12345, 'p': '0.001', 'q': '100', 'b': 88, 'a': 50,
+          'T': 123456785, 'm': True, 'M': True
+        }
         """
         return NormalizedEvent(
             timestamp=datetime.utcfromtimestamp(msg['T'] / 1000),
@@ -53,7 +71,13 @@ class DataNormalizer:
     @staticmethod
     def normalize_binance_orderbook(msg: dict) -> NormalizedEvent:
         """
-        Normalize Binance order book (depthUpdate) event
+        Normalize Binance depthUpdate (L2 orderbook) event payload.
+
+        Example input:
+        {
+          'e': 'depthUpdate', 'E': 123456789, 's': 'BTCUSDT',
+          'U': 157, 'u': 160, 'b': [['0.0024', '10']], 'a': [['0.0026', '100']]
+        }
         """
         return NormalizedEvent(
             timestamp=datetime.utcfromtimestamp(msg['E'] / 1000),
@@ -66,5 +90,6 @@ class DataNormalizer:
             asks=msg.get('a', [])
         )
 
+
 if __name__ == "__main__":
-    logger.info("Binance Data Normalizer Ready.")
+    logger.info("[XALGO] Binance Data Normalizer Ready.")

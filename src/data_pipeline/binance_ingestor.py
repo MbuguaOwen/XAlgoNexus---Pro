@@ -1,13 +1,13 @@
-# /src/data_pipeline/binance_ingestor.py
-
 import asyncio
 import websockets
 import json
 import logging
 import time
 import psycopg2
+
 from data_pipeline.data_normalizer import DataNormalizer
 from feature_engineering.feature_engineer import FeatureEngineer
+from messaging.market_event import MarketEvent
 
 logger = logging.getLogger("binance_ingestor")
 logging.basicConfig(level=logging.INFO)
@@ -24,10 +24,11 @@ def build_subscription():
     }
 
 class BinanceIngestor:
-    def __init__(self, db_conn):
+    def __init__(self, db_conn, process_event_func):
         self.db_conn = db_conn
         self.db_cursor = db_conn.cursor()
         self.feature_engineer = FeatureEngineer(db_conn)
+        self.process_event_func = process_event_func  # <- Function, not a message bus
 
     def store_features(self, fv):
         sql = """
@@ -43,23 +44,36 @@ class BinanceIngestor:
             self.db_conn.rollback()
 
     async def process_event(self, event):
-        fv = self.feature_engineer.update(event)
-        if fv:
-            logger.info(f"[FEATURES] {fv}")
-            self.store_features(fv)
+        try:
+            # Send to processing function (e.g. from live_controller)
+            await self.process_event_func(event)
+
+            # Local feature engineering
+            fv = self.feature_engineer.update(event)
+            if fv:
+                logger.info(f"[FEATURES] {fv}")
+                self.store_features(fv)
+
+        except Exception as e:
+            logger.exception(f"[BINANCE] Error in event processing: {e}")
 
     async def handle_message(self, message: dict):
         try:
             if message.get("e") == "trade":
                 event = DataNormalizer.normalize_binance_trade(message)
+                event.event_type = "trade"
                 await self.process_event(event)
                 logger.info(f"[TRADE] {event.pair} | Price: {event.price} | Qty: {event.quantity}")
+
             elif message.get("e") == "depthUpdate":
                 event = DataNormalizer.normalize_binance_orderbook(message)
+                event.event_type = "orderbook"
                 await self.process_event(event)
                 logger.info(f"[ORDERBOOK] {event.pair} | Bids: {event.bids[0]} | Asks: {event.asks[0]}")
+
             else:
                 logger.debug(f"[BINANCE] Unknown event: {message}")
+
         except Exception as e:
             logger.exception(f"[BINANCE] Message handling failed: {e}")
 
@@ -79,11 +93,12 @@ class BinanceIngestor:
                             await self.handle_message(msg)
                         elif "data" in msg:
                             await self.handle_message(msg["data"])
+
             except Exception as e:
                 logger.warning(f"[BINANCE] Reconnecting in 5s due to: {e}")
                 await asyncio.sleep(5)
 
-# ✅ Entry point function expected by live_controller
+# ✅ Entrypoint for live_controller.py
 async def connect_and_listen(process_event_func):
     db_conn = psycopg2.connect(
         dbname="xalgo_trading_db",
@@ -92,5 +107,5 @@ async def connect_and_listen(process_event_func):
         host="timescaledb",
         port="5432"
     )
-    ingestor = BinanceIngestor(db_conn)
+    ingestor = BinanceIngestor(db_conn, process_event_func=process_event_func)
     await ingestor.connect_and_listen()

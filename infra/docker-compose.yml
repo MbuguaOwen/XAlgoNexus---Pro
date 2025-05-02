@@ -1,5 +1,3 @@
-# /infra/docker-compose.yml
-
 version: '3.8'
 
 services:
@@ -15,6 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
+      - ./timescaledb_schema.sql:/docker-entrypoint-initdb.d/init.sql  # ✅ Ensures schema auto-loaded
     restart: unless-stopped
 
   prometheus:
@@ -51,15 +50,10 @@ services:
       DB_HOST: xalgo_trading_db
       DB_USER: postgres
       DB_PASSWORD: 11230428018
-      DB_NAME: xalgo_trading
+      DB_NAME: xalgo_trading_db  # 🔧 FIXED to match the actual DB name from POSTGRES_DB
     depends_on:
       - xalgo_trading_db
     restart: unless-stopped
 
 volumes:
   timescale_data:
-
-# Note:
-# - Adjust Dockerfile location if necessary.
-# - PostgreSQL exporter service can be added later if deeper DB metrics needed.
-# - Assumes proper Dockerfile for live_controller already exists (can generate next).

@@ -5,47 +5,72 @@ import random
 import uuid
 from datetime import datetime
 
-# Configure logger
+# Logger setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("execution_router")
 
+
 class ExecutionRouter:
-    def __init__(self, slippage_basis_points=5):
-        self.slippage_basis_points = slippage_basis_points  # Default slippage = 0.05%
+    """
+    Simulates or routes trade executions based on generated signals.
+    Handles slippage, logging, and internal tracking of orders.
+    """
+
+    def __init__(self, slippage_basis_points: float = 5.0):
+        """
+        Args:
+            slippage_basis_points (float): Slippage in bps (e.g., 5 = 0.05%)
+        """
+        self.slippage_basis_points = slippage_basis_points
         self.orders_executed = []
 
-    def simulate_order_execution(self, signal, base_price, quantity_usd):
+    def simulate_order_execution(self, signal: dict, base_price: float, quantity_usd: float) -> dict | None:
         """
-        Simulate an order execution based on signal, price, and quantity.
+        Simulates execution with slippage.
+
+        Args:
+            signal (dict): Trade signal with 'decision'
+            base_price (float): Mid-price or quoted spread
+            quantity_usd (float): Trade notional in USD
+
+        Returns:
+            dict: Order execution payload (simulated)
         """
-        if signal is None or signal['decision'] == "HOLD":
-            logger.info("[EXECUTION] No action for HOLD signal.")
+        if not signal or signal.get("decision", "HOLD") == "HOLD":
+            logger.debug("[EXECUTION] Skipping HOLD signal.")
             return None
 
-        # Apply random slippage
-        slippage_percent = random.uniform(0, self.slippage_basis_points) / 10000
-        fill_price = base_price * (1 + slippage_percent) if "BUY" in signal['decision'] else base_price * (1 - slippage_percent)
+        # Simulated slippage (bps range → decimal %)
+        slippage_pct = random.uniform(0, self.slippage_basis_points) / 10000
+
+        direction = signal["decision"].upper()
+        fill_price = (
+            base_price * (1 + slippage_pct) if "BUY" in direction
+            else base_price * (1 - slippage_pct)
+        )
 
         order = {
             "order_id": str(uuid.uuid4()),
-            "timestamp": datetime.utcnow().isoformat(),
-            "decision": signal['decision'],
-            "requested_price": base_price,
-            "filled_price": fill_price,
-            "slippage": slippage_percent,
-            "trade_value_usd": quantity_usd,
+            "timestamp": datetime.utcnow(),
+            "decision": direction,
+            "requested_price": round(base_price, 8),
+            "filled_price": round(fill_price, 8),
+            "slippage": round(slippage_pct, 8),
+            "trade_value_usd": round(quantity_usd, 2),
             "status": "FILLED"
         }
 
         self.orders_executed.append(order)
-
-        logger.info(f"[EXECUTION] Executed Order: {order}")
+        logger.info(f"[EXECUTION] Order Executed: {order}")
         return order
 
-    def get_last_order(self):
-        if self.orders_executed:
-            return self.orders_executed[-1]
-        return None
+    def get_last_order(self) -> dict | None:
+        """
+        Returns:
+            Most recent simulated order, if any
+        """
+        return self.orders_executed[-1] if self.orders_executed else None
+
 
 if __name__ == "__main__":
-    logger.info("Execution Router Ready.")
+    logger.info("[XALGO] Execution Router Ready.")

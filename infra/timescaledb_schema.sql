@@ -1,22 +1,25 @@
--- /infra/timescaledb_schema.sql
-
--- Enable TimescaleDB extension
+-- 📦 Enable TimescaleDB extension
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
--- Table for raw trade events
+-- ─────────────────────────────────────────────
+-- 🟦 Table: trade_events (Raw Trades)
+-- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS trade_events (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ NOT NULL,
     exchange TEXT NOT NULL,
     pair TEXT NOT NULL,
-    price NUMERIC(18,8) NOT NULL,
-    quantity NUMERIC(18,8) NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    quantity DOUBLE PRECISION NOT NULL,
     side TEXT NOT NULL
 );
-
 SELECT create_hypertable('trade_events', 'timestamp', if_not_exists => TRUE);
+CREATE INDEX IF NOT EXISTS idx_trade_events_pair     ON trade_events(pair);
+CREATE INDEX IF NOT EXISTS idx_trade_events_exchange ON trade_events(exchange);
 
--- Table for orderbook snapshots
+-- ─────────────────────────────────────────────
+-- 🟩 Table: orderbook_events (Level 2 Snapshots)
+-- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS orderbook_events (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ NOT NULL,
@@ -25,37 +28,40 @@ CREATE TABLE IF NOT EXISTS orderbook_events (
     bids TEXT,
     asks TEXT
 );
-
 SELECT create_hypertable('orderbook_events', 'timestamp', if_not_exists => TRUE);
+CREATE INDEX IF NOT EXISTS idx_orderbook_events_pair     ON orderbook_events(pair);
+CREATE INDEX IF NOT EXISTS idx_orderbook_events_exchange ON orderbook_events(exchange);
 
--- Table for engineered feature vectors
+-- ─────────────────────────────────────────────
+-- 🟨 Table: feature_vectors (ML Engineered Features)
+-- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS feature_vectors (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ NOT NULL,
-    spread NUMERIC(18,8),
-    volatility NUMERIC(18,8),
-    imbalance NUMERIC(18,8)
+    spread DOUBLE PRECISION,
+    volatility DOUBLE PRECISION,
+    imbalance DOUBLE PRECISION
 );
-
 SELECT create_hypertable('feature_vectors', 'timestamp', if_not_exists => TRUE);
+CREATE INDEX IF NOT EXISTS idx_feature_vectors_spread ON feature_vectors(spread);
 
--- Table for executed orders
+-- ─────────────────────────────────────────────
+-- 🟥 Table: execution_orders (Order Execution Logs)
+-- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS execution_orders (
     id SERIAL PRIMARY KEY,
     order_id UUID NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
     decision TEXT NOT NULL,
-    requested_price NUMERIC(18,8),
-    filled_price NUMERIC(18,8),
-    slippage NUMERIC(10,8),
-    trade_value_usd NUMERIC(18,8),
+    requested_price DOUBLE PRECISION,
+    filled_price DOUBLE PRECISION,
+    slippage DOUBLE PRECISION,
+    trade_value_usd DOUBLE PRECISION,
     status TEXT NOT NULL
 );
-
 SELECT create_hypertable('execution_orders', 'timestamp', if_not_exists => TRUE);
-
--- Indexes for faster querying
-CREATE INDEX IF NOT EXISTS idx_trade_events_pair ON trade_events(pair);
-CREATE INDEX IF NOT EXISTS idx_orderbook_events_pair ON orderbook_events(pair);
-CREATE INDEX IF NOT EXISTS idx_feature_vectors_spread ON feature_vectors(spread);
 CREATE INDEX IF NOT EXISTS idx_execution_orders_order_id ON execution_orders(order_id);
+
+-- 🧠 Note:
+-- - TEXT types for `bids`, `asks` assume serialized array (JSON or delimited).
+-- - UUID and TIMESTAMPTZ ensure traceability and time-series reliability.

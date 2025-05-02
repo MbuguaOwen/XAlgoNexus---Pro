@@ -1,28 +1,33 @@
-# /infra/docker/Dockerfile
+# ----------------------
+# Final Runtime Stage Only (Fast Build Using Prebuilt Wheels)
+# ----------------------
+    FROM python:3.11-slim
 
-# Base Python image
-FROM python:3.11-slim
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONPATH="/app/src"
-
-# Set working directory
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt /app/
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
-
-# Copy project source code
-COPY src/ /app/src/
-COPY config/ /app/config/
-COPY infra/monitoring/ /app/monitoring/
-
-# Expose metrics port
-EXPOSE 9100
-
-# Set default command to run Live Controller
-CMD ["python", "-m", "main.live_controller"]
+    # Environment variables
+    ENV PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONUNBUFFERED=1 \
+        PYTHONPATH="/app/src"
+    
+    WORKDIR /app
+    
+    # System dependencies for PostgreSQL
+    RUN apt-get update && apt-get install -y \
+        libpq-dev \
+     && apt-get clean && rm -rf /var/lib/apt/lists/*
+    
+    # Install from prebuilt wheel cache
+    COPY requirements.txt .
+    COPY wheels-linux/ /wheels/
+    RUN pip install --no-cache-dir --default-timeout=180 --find-links=/wheels -r requirements.txt
+    
+    # Copy source code
+    COPY src/ /app/src/
+    COPY config/ /app/config/
+    COPY infra/monitoring/ /app/monitoring/
+    
+    # Expose Prometheus metrics port
+    EXPOSE 9100
+    
+    # Run live controller
+    CMD ["python", "-m", "main.live_controller"]
+    
