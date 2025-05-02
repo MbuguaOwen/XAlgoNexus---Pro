@@ -1,21 +1,17 @@
-# /src/feature_engineering/feature_engineer.py
-
 import numpy as np
 import pandas as pd
 from collections import deque
 import logging
-import psycopg2
-from psycopg2.extras import execute_values
+from core.filters.kalman_spread_estimator import KalmanSpreadEstimator
 
 # Logger setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("feature_engineer")
 
-
 class FeatureEngineer:
     """
     Computes real-time engineered features from normalized trade events.
-    Supports spread analysis and basic volatility/imbalance tracking.
+    Supports adaptive spread analysis and basic volatility/imbalance tracking.
     """
 
     def __init__(self, db_conn=None, maxlen=500):
@@ -24,9 +20,9 @@ class FeatureEngineer:
             'ethusdt': deque(maxlen=maxlen),
             'ethbtc': deque(maxlen=maxlen)
         }
-        self.spreads = deque(maxlen=maxlen)
         self.timestamps = deque(maxlen=maxlen)
         self.db_conn = db_conn
+        self.kalman = KalmanSpreadEstimator()
 
     def update(self, event):
         """
@@ -45,8 +41,6 @@ class FeatureEngineer:
 
         if self.ready():
             fv = self.calculate_features()
-            if fv and self.db_conn:
-                self.insert_to_db(fv)
             return fv
 
         return None
@@ -59,7 +53,7 @@ class FeatureEngineer:
 
     def calculate_features(self):
         """
-        Computes spread, volatility, and synthetic imbalance values.
+        Computes Kalman-filtered spread, volatility (as spread std), and synthetic imbalance.
         """
         try:
             btc_usdt = self.prices['btcusdt'][-1]
@@ -68,15 +62,18 @@ class FeatureEngineer:
 
             implied_ethbtc = eth_usdt / btc_usdt
             spread = eth_btc - implied_ethbtc
-            self.spreads.append(spread)
 
-            volatility = np.std(self.spreads) if len(self.spreads) > 5 else 0.0
-            imbalance = np.random.uniform(-1, 1)  # 🔄 Replace with real imbalance if available
+            # Update Kalman filter
+            self.kalman.update(implied_ethbtc, eth_btc)
+            zscore = self.kalman.get_zscore()
+
+            imbalance = np.random.uniform(-1, 1)  # 🔄 Replace with real imbalance when available
 
             feature_vector = {
                 "timestamp": self.timestamps[-1],
                 "spread": spread,
-                "volatility": volatility,
+                "spread_zscore": zscore,
+                "volatility": self.kalman.spread_std,
                 "imbalance": imbalance
             }
 
@@ -86,28 +83,3 @@ class FeatureEngineer:
         except Exception as e:
             logger.error(f"[FEATURE_CALCULATION_ERROR] {e}")
             return None
-
-    def insert_to_db(self, fv):
-        """
-        Inserts feature vector into the TimescaleDB feature_vectors table.
-        """
-        try:
-            with self.db_conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO feature_vectors (timestamp, spread, volatility, imbalance)
-                    VALUES (%s, %s, %s, %s)
-                """, (
-                    fv['timestamp'],
-                    float(fv['spread']),
-                    float(fv['volatility']),
-                    float(fv['imbalance'])
-                ))
-            self.db_conn.commit()
-
-        except Exception as e:
-            logger.error(f"[DB_INSERT_ERROR] {e}")
-            self.db_conn.rollback()
-
-
-if __name__ == "__main__":
-    logger.info("[XALGO] Feature Engineer Ready.")

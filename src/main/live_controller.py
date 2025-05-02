@@ -1,5 +1,3 @@
-# /src/main/live_controller.py
-
 import asyncio
 import logging
 from fastapi import FastAPI
@@ -13,6 +11,7 @@ from feature_engineering.feature_engineer import FeatureEngineer
 from strategy_core.signal_generator import SignalGenerator
 from risk_manager.risk_manager import RiskManager
 from execution_layer.execution_router import ExecutionRouter
+from execution_layer.pnl_tracker import PnLTracker
 from data_pipeline.timescaledb_adapter import TimescaleDBAdapter
 
 # ✅ Delayed import to prevent circular import
@@ -34,6 +33,7 @@ feature_engineer = FeatureEngineer()
 signal_generator = SignalGenerator()
 risk_manager = RiskManager()
 execution_router = ExecutionRouter()
+pnl_tracker = PnLTracker()
 
 # DB connection settings for Docker-based TimescaleDB
 db_config = {
@@ -68,7 +68,7 @@ async def process_event(event):
             # Generate and simulate signals
             signal = signal_generator.generate_signal(feature)
             if signal and signal["decision"] != "HOLD":
-                base_price = feature["spread"]  # ⚠️ Consider replacing with midprice
+                base_price = feature["spread"]  # ⚠️ Replace with midprice later
                 quantity_usd = 1000.0
                 slippage = 0.0005
 
@@ -76,8 +76,14 @@ async def process_event(event):
                     order = execution_router.simulate_order_execution(signal, base_price, quantity_usd)
                     if order:
                         await storage_adapter.insert_execution_order(order)
-                        pnl_delta = (order['filled_price'] - order['requested_price']) * quantity_usd
-                        risk_manager.update_pnl(pnl_delta)
+                        pnl_tracker.update_position(
+                            symbol=order['pair'],
+                            fill_price=order['filled_price'],
+                            qty=order['quantity'],
+                            side=order['side']
+                        )
+                        pnl_tracker.mark_to_market({order['pair']: order['filled_price']})
+                        risk_manager.update_pnl(pnl_tracker.get_total_pnl())
                         pnl_gauge.set(risk_manager.daily_pnl)
 
     except Exception as e:
@@ -89,10 +95,15 @@ async def start_pipeline():
     await storage_adapter.init_pool()
     await binance_ingestor.connect_and_listen(process_event)
 
-# ✅ Prometheus HTTP endpoint for FastAPI
+# ✅ Prometheus metrics endpoint
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+# ✅ JSON PnL summary endpoint
+@app.get("/pnl")
+def get_pnl():
+    return pnl_tracker.summary()
 
 # ✅ Entrypoint
 if __name__ == "__main__":
@@ -107,7 +118,7 @@ if __name__ == "__main__":
         )
 
     try:
-        start_http_server(9090)  # Optional: standalone Prometheus HTTP
+        start_http_server(9090)  # Prometheus port
         asyncio.run(run_all())
     except KeyboardInterrupt:
         logger.info("[XALGO] Graceful shutdown.")

@@ -1,4 +1,3 @@
-
 from collections import deque
 import time
 from core.filters.ml_filter import MLFilter
@@ -23,8 +22,8 @@ class SignalEngine:
         self.lower_thresh = lower_thresh
         self.vol_cap = vol_cap
         self.imbalance_cap = imbalance_cap
-        self.ml_filter = ml_filter  # should have .predict(fv) method
-        self.signal_queue = deque()  # placeholder for ZeroMQ or ring buffer
+        self.ml_filter = ml_filter or MLFilter()
+        self.signal_queue = deque()
 
     def process(self, fv: dict):
         ts = time.time()
@@ -34,21 +33,25 @@ class SignalEngine:
         volatility = fv.get('volatility', 0)
         imbalance = abs(fv.get('imbalance', 0))
 
+        # Signal generation logic
         if spread_z > self.upper_thresh:
-            signals.append(TradeSignal("SHORT_REAL_LONG_SYNTH", "Spread upper bound", ts))
+            signals.append(TradeSignal("SHORT_REAL_LONG_SYNTH", "Spread upper bound", ts, fv))
         elif spread_z < self.lower_thresh:
-            signals.append(TradeSignal("LONG_REAL_SHORT_SYNTH", "Spread lower bound", ts))
+            signals.append(TradeSignal("LONG_REAL_SHORT_SYNTH", "Spread lower bound", ts, fv))
 
         if imbalance > self.imbalance_cap and volatility < self.vol_cap:
-            signals.append(TradeSignal("IMBALANCE_TRADE", "Order book imbalance signal", ts))
+            signals.append(TradeSignal("IMBALANCE_TRADE", "Order book imbalance signal", ts, fv))
 
+        # ML filter override
         if self.ml_filter:
             ml_decision = self.ml_filter.predict(fv)
             if ml_decision != 1:
+                print("[SignalEngine] ML filter vetoed signal")
                 return
             else:
                 signals = [s for s in signals if s.signal_type != "IMBALANCE_TRADE"]
 
+        # Emit signals
         for signal in signals:
             signal_counter.labels(type=signal.signal_type).inc()
             self.signal_queue.append(signal)
