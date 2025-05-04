@@ -18,12 +18,7 @@
             "interval": ""
           }
         ],
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 0
-        },
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
         "datasource": "Prometheus"
       },
       {
@@ -36,12 +31,7 @@
             "interval": ""
           }
         ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 8
-        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
         "datasource": "Prometheus"
       },
       {
@@ -54,12 +44,7 @@
             "interval": ""
           }
         ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 8
-        },
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
         "datasource": "Prometheus"
       },
       {
@@ -72,12 +57,7 @@
             "interval": ""
           }
         ],
-        "gridPos": {
-          "h": 8,
-          "w": 24,
-          "x": 0,
-          "y": 16
-        },
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
         "datasource": "Prometheus"
       },
       {
@@ -85,17 +65,11 @@
         "title": "ML Filter Accuracy (%)",
         "targets": [
           {
-            "expr": "mlfilter_correct_predictions / mlfilter_total_predictions * 100",
-            "legendFormat": "Accuracy %",
-            "interval": ""
+            "expr": "100 * mlfilter_correct_predictions_total / mlfilter_total_predictions_total",
+            "legendFormat": "Accuracy %"
           }
         ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 24
-        },
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
         "datasource": "Prometheus",
         "fieldConfig": {
           "defaults": {
@@ -105,18 +79,9 @@
             "thresholds": {
               "mode": "absolute",
               "steps": [
-                {
-                  "color": "red",
-                  "value": 0
-                },
-                {
-                  "color": "yellow",
-                  "value": 70
-                },
-                {
-                  "color": "green",
-                  "value": 90
-                }
+                { "color": "red", "value": 0 },
+                { "color": "yellow", "value": 70 },
+                { "color": "green", "value": 90 }
               ]
             }
           }
