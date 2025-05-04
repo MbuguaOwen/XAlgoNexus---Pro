@@ -1,12 +1,12 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import asyncio
 import logging
 from fastapi import FastAPI
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, start_http_server
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from metrics.metrics import spread_gauge, volatility_gauge, imbalance_gauge, pnl_gauge
 from data_pipeline.data_normalizer import DataNormalizer
@@ -16,9 +16,7 @@ from risk_manager.risk_manager import RiskManager
 from execution_layer.execution_router import ExecutionRouter
 from execution_layer.pnl_tracker import PnLTracker
 from data_pipeline.timescaledb_adapter import TimescaleDBAdapter
-
-# ✅ Delayed import to prevent circular import
-from data_pipeline import binance_ingestor
+from data_pipeline import binance_ingestor  # Delayed import
 
 # Logging setup
 logging.basicConfig(
@@ -27,18 +25,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger("live_controller")
 
-# FastAPI instance
+# FastAPI app
 app = FastAPI()
 
-# Component initialization
+# Initialize components
 normalizer = DataNormalizer()
 feature_engineer = FeatureEngineer()
-signal_generator = SignalGenerator()
 risk_manager = RiskManager()
 execution_router = ExecutionRouter()
 pnl_tracker = PnLTracker()
 
-# DB config for Docker-based TimescaleDB
+# Handle missing model safely
+try:
+    signal_generator = SignalGenerator()
+except Exception as e:
+    logger.warning(f"[MLFilter] Model initialization failed: {e}")
+    
+    class DummySignalGenerator:
+        def generate_signal(self, feature):
+            logger.warning("[DummySignal] Returning HOLD due to missing model.")
+            return {"decision": "HOLD"}
+
+    signal_generator = DummySignalGenerator()
+
 db_config = {
     'user': 'postgres',
     'password': '11230428018',
@@ -46,11 +55,9 @@ db_config = {
     'host': 'timescaledb',
     'port': 5432
 }
-
-# Global DB adapter
 storage_adapter = TimescaleDBAdapter(db_config)
 
-# ✅ Event Handler
+# Main event loop
 async def process_event(event):
     try:
         if event.event_type == 'trade':
@@ -58,7 +65,6 @@ async def process_event(event):
         elif event.event_type == 'orderbook':
             await storage_adapter.insert_orderbook_event(event)
 
-        # Feature generation
         feature = feature_engineer.update(event)
         if feature:
             await storage_adapter.insert_feature_vector(feature)
@@ -69,7 +75,7 @@ async def process_event(event):
 
             signal = signal_generator.generate_signal(feature)
             if signal and signal["decision"] != "HOLD":
-                base_price = feature["spread"]  # ⚠️ Use midprice when available
+                base_price = feature["spread"]
                 quantity_usd = 1000.0
                 slippage = 0.0005
 
@@ -86,17 +92,15 @@ async def process_event(event):
                         pnl_tracker.mark_to_market({order['pair']: order['filled_price']})
                         risk_manager.update_pnl(pnl_tracker.get_total_pnl())
                         pnl_gauge.set(risk_manager.daily_pnl)
-
     except Exception as e:
         logger.error(f"[LIVE_CONTROLLER] Event processing failed: {e}")
 
-# ✅ Pipeline Bootstrap
+# Startup
 async def start_pipeline():
     logger.info("[XALGO] Bootstrapping components...")
     await storage_adapter.init_pool()
     await binance_ingestor.connect_and_listen(process_event)
 
-# ✅ FastAPI endpoints
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
@@ -105,12 +109,8 @@ def metrics():
 def get_pnl():
     return pnl_tracker.summary()
 
-# ✅ Unified Entrypoint for Docker
-import uvicorn
-
+# Entry point
 if __name__ == "__main__":
-    start_http_server(9100)  # Expose Prometheus metrics
-
-    loop = asyncio.get_event_loop()
-    loop.create_task(start_pipeline())  # Start ingestion + feature pipeline
+    start_http_server(9100)
+    asyncio.run(start_pipeline())
     uvicorn.run(app, host="0.0.0.0", port=9100)

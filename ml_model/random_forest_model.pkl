@@ -1,0 +1,17 @@
+import pickle
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
+
+# Dummy RandomForest model that always returns a constant class
+X_dummy = np.array([[0, 0, 0]])
+y_dummy = ["HOLD"]
+
+model = RandomForestClassifier()
+model.fit(X_dummy, y_dummy)
+
+# Save model to file
+model_path = "/mnt/data/random_forest_model.pkl"
+with open(model_path, "wb") as f:
+    pickle.dump(model, f)
+
+model_path
