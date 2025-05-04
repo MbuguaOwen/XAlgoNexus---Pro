@@ -20,3 +20,8 @@ scrape_configs:
   - job_name: 'timescaledb'
     static_configs:
       - targets: ['timescaledb:9187']  # PostgreSQL exporter port
+
+  - job_name: 'ml_filter'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['live_controller:9100']

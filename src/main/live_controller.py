@@ -12,13 +12,15 @@ from metrics.metrics import spread_gauge, volatility_gauge, imbalance_gauge, pnl
 from data_pipeline.data_normalizer import DataNormalizer
 from feature_engineering.feature_engineer import FeatureEngineer
 from strategy_core.signal_generator import SignalGenerator
+from filters.ml_filter import MLFilter
+from filters.ml_filter import prediction_total, prediction_correct
 from risk_manager.risk_manager import RiskManager
 from execution_layer.execution_router import ExecutionRouter
 from execution_layer.pnl_tracker import PnLTracker
 from data_pipeline.timescaledb_adapter import TimescaleDBAdapter
-from data_pipeline import binance_ingestor  # Delayed import
+from data_pipeline import binance_ingestor
 
-# Logging setup
+# Logging
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] %(levelname)s - %(name)s - %(message)s"
@@ -28,26 +30,29 @@ logger = logging.getLogger("live_controller")
 # FastAPI app
 app = FastAPI()
 
-# Initialize components
+# Component init
 normalizer = DataNormalizer()
 feature_engineer = FeatureEngineer()
 risk_manager = RiskManager()
 execution_router = ExecutionRouter()
 pnl_tracker = PnLTracker()
 
-# Handle missing model safely
+# ML-based Signal Generator
 try:
     signal_generator = SignalGenerator()
+    ml_filter = MLFilter()
 except Exception as e:
     logger.warning(f"[MLFilter] Model initialization failed: {e}")
-    
+
     class DummySignalGenerator:
         def generate_signal(self, feature):
             logger.warning("[DummySignal] Returning HOLD due to missing model.")
             return {"decision": "HOLD"}
 
     signal_generator = DummySignalGenerator()
+    ml_filter = None
 
+# Database
 db_config = {
     'user': 'postgres',
     'password': '11230428018',
@@ -57,7 +62,7 @@ db_config = {
 }
 storage_adapter = TimescaleDBAdapter(db_config)
 
-# Main event loop
+# Event Processor
 async def process_event(event):
     try:
         if event.event_type == 'trade':
@@ -74,7 +79,12 @@ async def process_event(event):
             imbalance_gauge.set(feature["imbalance"])
 
             signal = signal_generator.generate_signal(feature)
+
             if signal and signal["decision"] != "HOLD":
+                if ml_filter and ml_filter.predict(feature) != 1:
+                    logger.info("[MLFilter] Prediction blocked signal execution.")
+                    return
+
                 base_price = feature["spread"]
                 quantity_usd = 1000.0
                 slippage = 0.0005
@@ -95,12 +105,13 @@ async def process_event(event):
     except Exception as e:
         logger.error(f"[LIVE_CONTROLLER] Event processing failed: {e}")
 
-# Startup
+# Bootstrap
 async def start_pipeline():
     logger.info("[XALGO] Bootstrapping components...")
     await storage_adapter.init_pool()
     await binance_ingestor.connect_and_listen(process_event)
 
+# Endpoints
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
@@ -109,8 +120,9 @@ def metrics():
 def get_pnl():
     return pnl_tracker.summary()
 
-# Entry point
+# Entrypoint
 if __name__ == "__main__":
     start_http_server(9100)
     asyncio.run(start_pipeline())
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=9100)

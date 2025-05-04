@@ -1,10 +1,12 @@
-
 {
   "dashboard": {
     "id": null,
     "uid": "xalgo-dashboard",
     "title": "XAlgo Trading System Dashboard",
     "timezone": "UTC",
+    "refresh": "5s",
+    "schemaVersion": 27,
+    "version": 2,
     "panels": [
       {
         "type": "graph",
@@ -16,7 +18,12 @@
             "interval": ""
           }
         ],
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
         "datasource": "Prometheus"
       },
       {
@@ -29,7 +36,12 @@
             "interval": ""
           }
         ],
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
         "datasource": "Prometheus"
       },
       {
@@ -42,7 +54,12 @@
             "interval": ""
           }
         ],
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
         "datasource": "Prometheus"
       },
       {
@@ -55,13 +72,57 @@
             "interval": ""
           }
         ],
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 16
+        },
         "datasource": "Prometheus"
+      },
+      {
+        "type": "gauge",
+        "title": "ML Filter Accuracy (%)",
+        "targets": [
+          {
+            "expr": "mlfilter_correct_predictions / mlfilter_total_predictions * 100",
+            "legendFormat": "Accuracy %",
+            "interval": ""
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        },
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            }
+          }
+        }
       }
-    ],
-    "schemaVersion": 27,
-    "version": 1,
-    "refresh": "5s"
+    ]
   },
   "overwrite": true
 }
