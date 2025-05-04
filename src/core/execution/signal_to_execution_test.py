@@ -1,6 +1,6 @@
 
 from core.signal.signal_engine import SignalEngine
-from core.filters.ml_filter import MLFilter
+from filters.ml_filter import MLFilter
 from core.execution.execution_engine import ExecutionEngine
 
 # Setup components

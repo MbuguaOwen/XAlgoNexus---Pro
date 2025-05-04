@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from collections import deque
 import logging
-from core.filters.kalman_spread_estimator import KalmanSpreadEstimator
+from filters.kalman_spread_estimator import KalmanSpreadEstimator
 
 # Logger setup
 logging.basicConfig(level=logging.INFO)

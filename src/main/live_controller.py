@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import asyncio
 import logging
 from fastapi import FastAPI
@@ -5,7 +9,6 @@ from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, start_http_server
 
 from metrics.metrics import spread_gauge, volatility_gauge, imbalance_gauge, pnl_gauge
-
 from data_pipeline.data_normalizer import DataNormalizer
 from feature_engineering.feature_engineer import FeatureEngineer
 from strategy_core.signal_generator import SignalGenerator
@@ -35,7 +38,7 @@ risk_manager = RiskManager()
 execution_router = ExecutionRouter()
 pnl_tracker = PnLTracker()
 
-# DB connection settings for Docker-based TimescaleDB
+# DB config for Docker-based TimescaleDB
 db_config = {
     'user': 'postgres',
     'password': '11230428018',
@@ -60,15 +63,13 @@ async def process_event(event):
         if feature:
             await storage_adapter.insert_feature_vector(feature)
 
-            # Update Prometheus metrics
             spread_gauge.set(feature["spread"])
             volatility_gauge.set(feature["volatility"])
             imbalance_gauge.set(feature["imbalance"])
 
-            # Generate and simulate signals
             signal = signal_generator.generate_signal(feature)
             if signal and signal["decision"] != "HOLD":
-                base_price = feature["spread"]  # ⚠️ Replace with midprice later
+                base_price = feature["spread"]  # ⚠️ Use midprice when available
                 quantity_usd = 1000.0
                 slippage = 0.0005
 
@@ -95,32 +96,21 @@ async def start_pipeline():
     await storage_adapter.init_pool()
     await binance_ingestor.connect_and_listen(process_event)
 
-# ✅ Prometheus metrics endpoint
+# ✅ FastAPI endpoints
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-# ✅ JSON PnL summary endpoint
 @app.get("/pnl")
 def get_pnl():
     return pnl_tracker.summary()
 
-# ✅ Entrypoint
+# ✅ Unified Entrypoint for Docker
+import uvicorn
+
 if __name__ == "__main__":
-    import uvicorn
+    start_http_server(9100)  # Expose Prometheus metrics
 
-    async def run_all():
-        await asyncio.gather(
-            start_pipeline(),
-            uvicorn.Server(
-                uvicorn.Config(app, host="0.0.0.0", port=9100, log_level="info")
-            ).serve()
-        )
-
-    try:
-        start_http_server(9090)  # Prometheus port
-        asyncio.run(run_all())
-    except KeyboardInterrupt:
-        logger.info("[XALGO] Graceful shutdown.")
-    except Exception as e:
-        logger.exception(f"[XALGO] Fatal error during startup: {e}")
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_pipeline())  # Start ingestion + feature pipeline
+    uvicorn.run(app, host="0.0.0.0", port=9100)

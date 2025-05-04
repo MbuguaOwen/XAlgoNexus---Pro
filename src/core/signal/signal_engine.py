@@ -1,6 +1,6 @@
 from collections import deque
 import time
-from core.filters.ml_filter import MLFilter
+from filters.ml_filter import MLFilter
 from prometheus_client import Counter
 
 # Prometheus metrics

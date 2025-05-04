@@ -13,14 +13,14 @@ services:
       - "5432:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
-      - ./timescaledb_schema.sql:/docker-entrypoint-initdb.d/init.sql  # ✅ Ensures schema auto-loaded
+      - ./timescaledb_schema.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
     restart: unless-stopped
@@ -29,8 +29,8 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
     ports:
       - "3000:3000"
     volumes:
@@ -50,7 +50,9 @@ services:
       DB_HOST: xalgo_trading_db
       DB_USER: postgres
       DB_PASSWORD: 11230428018
-      DB_NAME: xalgo_trading_db  # 🔧 FIXED to match the actual DB name from POSTGRES_DB
+      DB_NAME: xalgo_trading_db
+    volumes:
+      - ../wheels:/wheels:ro  # ✅ Mount pre-built wheels
     depends_on:
       - xalgo_trading_db
     restart: unless-stopped

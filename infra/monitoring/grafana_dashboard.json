@@ -1,67 +1,67 @@
+
 {
-    "dashboard": {
-      "id": null,
-      "uid": "xalgo-dashboard",
-      "title": "XAlgo Trading System Dashboard",
-      "timezone": "UTC",
-      "panels": [
-        {
-          "type": "graph",
-          "title": "Spread Monitor",
-          "targets": [
-            {
-              "expr": "xalgo_latest_spread",
-              "legendFormat": "Spread",
-              "interval": ""
-            }
-          ],
-          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
-          "datasource": "Prometheus"
-        },
-        {
-          "type": "graph",
-          "title": "Volatility Monitor",
-          "targets": [
-            {
-              "expr": "xalgo_latest_volatility",
-              "legendFormat": "Volatility",
-              "interval": ""
-            }
-          ],
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-          "datasource": "Prometheus"
-        },
-        {
-          "type": "graph",
-          "title": "Orderbook Imbalance Monitor",
-          "targets": [
-            {
-              "expr": "xalgo_latest_imbalance",
-              "legendFormat": "Imbalance",
-              "interval": ""
-            }
-          ],
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-          "datasource": "Prometheus"
-        },
-        {
-          "type": "graph",
-          "title": "Daily P&L Tracker",
-          "targets": [
-            {
-              "expr": "xalgo_daily_pnl",
-              "legendFormat": "PnL",
-              "interval": ""
-            }
-          ],
-          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
-          "datasource": "Prometheus"
-        }
-      ],
-      "schemaVersion": 27,
-      "version": 1,
-      "refresh": "5s"
-    },
-    "overwrite": true
-  }
-  
+  "dashboard": {
+    "id": null,
+    "uid": "xalgo-dashboard",
+    "title": "XAlgo Trading System Dashboard",
+    "timezone": "UTC",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Spread Monitor",
+        "targets": [
+          {
+            "expr": "xalgo_latest_spread",
+            "legendFormat": "Spread",
+            "interval": ""
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "datasource": "Prometheus"
+      },
+      {
+        "type": "graph",
+        "title": "Volatility Monitor",
+        "targets": [
+          {
+            "expr": "xalgo_latest_volatility",
+            "legendFormat": "Volatility",
+            "interval": ""
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "datasource": "Prometheus"
+      },
+      {
+        "type": "graph",
+        "title": "Orderbook Imbalance Monitor",
+        "targets": [
+          {
+            "expr": "xalgo_latest_imbalance",
+            "legendFormat": "Imbalance",
+            "interval": ""
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "datasource": "Prometheus"
+      },
+      {
+        "type": "graph",
+        "title": "Daily P&L Tracker",
+        "targets": [
+          {
+            "expr": "xalgo_daily_pnl",
+            "legendFormat": "PnL",
+            "interval": ""
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "datasource": "Prometheus"
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "5s"
+  },
+  "overwrite": true
+}
